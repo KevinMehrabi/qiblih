@@ -63,16 +63,21 @@ final class LocationHeadingManager: NSObject, ObservableObject {
 
     static func bearing(from origin: CLLocationCoordinate2D, to destination: CLLocationCoordinate2D) -> CLLocationDirection {
         let phi1 = origin.latitude.radians
-        let lambda1 = origin.longitude.radians
         let phi2 = destination.latitude.radians
-        let lambda2 = destination.longitude.radians
-        let deltaLambda = lambda2 - lambda1
+        var deltaLambda = (destination.longitude - origin.longitude).radians
 
-        let y = sin(deltaLambda) * cos(phi2)
-        let x = cos(phi1) * sin(phi2) - sin(phi1) * cos(phi2) * cos(deltaLambda)
-        let theta = atan2(y, x)
+        if abs(deltaLambda) > .pi {
+            deltaLambda = deltaLambda > 0
+                ? -(2 * .pi - deltaLambda)
+                : (2 * .pi + deltaLambda)
+        }
 
-        return normalizeDegrees(theta.degrees)
+        let deltaPsi = log(
+            tan(phi2 / 2 + .pi / 4) /
+            tan(phi1 / 2 + .pi / 4)
+        )
+
+        return normalizeDegrees(atan2(deltaLambda, deltaPsi).degrees)
     }
 
     static func shortestSignedAngle(from currentHeading: CLLocationDirection, to targetBearing: CLLocationDirection) -> CLLocationDirection {
@@ -165,7 +170,9 @@ extension LocationHeadingManager: CLLocationManagerDelegate {
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let location = locations.last else {
+        guard let location = locations.last,
+              location.horizontalAccuracy >= 0,
+              abs(location.timestamp.timeIntervalSinceNow) < 60 else {
             return
         }
 

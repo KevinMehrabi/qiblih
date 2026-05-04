@@ -3,16 +3,10 @@ import CoreLocation
 import Foundation
 
 final class LocationHeadingManager: NSObject, ObservableObject {
-    private enum QiblihDirectionRule {
-        case fixedCoordinateLocalPlaneNoRoute
-    }
-
     static let qiblihCoordinate = CLLocationCoordinate2D(
-        latitude: 32.9393306,
-        longitude: 35.0886667
+        latitude: 32.9445,
+        longitude: 35.0918
     )
-
-    private static let qiblihDirectionRule: QiblihDirectionRule = .fixedCoordinateLocalPlaneNoRoute
 
     @Published private(set) var authorizationStatus: CLAuthorizationStatus
     @Published private(set) var currentLocation: CLLocation?
@@ -68,42 +62,46 @@ final class LocationHeadingManager: NSObject, ObservableObject {
     }
 
     static func qiblihBearing(from origin: CLLocationCoordinate2D) -> CLLocationDirection {
-        bearing(from: origin, to: qiblihCoordinate, rule: qiblihDirectionRule)
+        rhumbBearing(
+            from: origin.latitude,
+            lon1: origin.longitude,
+            to: qiblihCoordinate.latitude,
+            lon2: qiblihCoordinate.longitude
+        )
     }
 
-    private static func bearing(
-        from origin: CLLocationCoordinate2D,
-        to destination: CLLocationCoordinate2D,
-        rule: QiblihDirectionRule
+    static func rhumbBearing(
+        from lat1: Double,
+        lon1: Double,
+        to lat2: Double,
+        lon2: Double
     ) -> CLLocationDirection {
-        switch rule {
-        case .fixedCoordinateLocalPlaneNoRoute:
-            return fixedCoordinateLocalPlaneBearing(from: origin, to: destination)
+        let phi1 = lat1.radians
+        let phi2 = lat2.radians
+        var deltaLambda = (lon2 - lon1).radians
+
+        let deltaPsi = log(
+            tan(phi2 / 2 + .pi / 4) /
+            tan(phi1 / 2 + .pi / 4)
+        )
+
+        if abs(deltaLambda) > .pi {
+            deltaLambda = deltaLambda > 0
+                ? -(2 * .pi - deltaLambda)
+                : (2 * .pi + deltaLambda)
         }
-    }
 
-    private static func fixedCoordinateLocalPlaneBearing(
-        from origin: CLLocationCoordinate2D,
-        to destination: CLLocationCoordinate2D
-    ) -> CLLocationDirection {
-        let originLatitude = origin.latitude.radians
-        let originLongitude = origin.longitude.radians
-        let destinationLatitude = destination.latitude.radians
-        let destinationLongitude = destination.longitude.radians
-        let deltaLongitude = destinationLongitude - originLongitude
-
-        // Orientation only: no distance, no route choice, no longitude normalization.
-        let eastComponent = cos(destinationLatitude) * sin(deltaLongitude)
-        let northComponent = cos(originLatitude) * sin(destinationLatitude)
-            - sin(originLatitude) * cos(destinationLatitude) * cos(deltaLongitude)
-        let theta = atan2(eastComponent, northComponent)
+        let theta = atan2(deltaLambda, deltaPsi)
 
         return normalizeDegrees(theta.degrees)
     }
 
-    static func signedTurnAngle(from currentHeading: CLLocationDirection, to targetBearing: CLLocationDirection) -> CLLocationDirection {
-        let delta = normalizeDegrees(targetBearing - currentHeading + 180) - 180
-        return delta == -180 ? 180 : delta
+    static func relativeAngle(from currentHeading: CLLocationDirection, to targetBearing: CLLocationDirection) -> CLLocationDirection {
+        normalizeDegrees(targetBearing - currentHeading)
+    }
+
+    static func signedTurnAngle(from relativeAngle: CLLocationDirection) -> CLLocationDirection {
+        relativeAngle > 180 ? relativeAngle - 360 : relativeAngle
     }
 
     static func normalizeDegrees(_ degrees: CLLocationDirection) -> CLLocationDirection {
@@ -133,18 +131,16 @@ final class LocationHeadingManager: NSObject, ObservableObject {
     }
 
     private func updateHeading(from heading: CLHeading) {
-        if heading.trueHeading >= 0 {
-            currentHeading = Self.normalizeDegrees(heading.trueHeading)
-            isUsingApproximateHeading = false
-        } else if heading.magneticHeading >= 0 {
-            currentHeading = Self.normalizeDegrees(heading.magneticHeading)
-            isUsingApproximateHeading = true
-        } else {
+        guard heading.trueHeading >= 0 else {
             currentHeading = nil
-            isUsingApproximateHeading = true
-            detailText = "The compass heading is not available yet."
+            isUsingApproximateHeading = false
+            detailText = "Waiting for true heading."
+            updateDirectionIfPossible()
+            return
         }
 
+        currentHeading = Self.normalizeDegrees(heading.trueHeading)
+        isUsingApproximateHeading = false
         updateDirectionIfPossible()
     }
 
@@ -152,15 +148,20 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         guard let currentHeading, let targetBearing else {
             if hasLocationAuthorization {
                 statusText = "Finding the Qiblih"
-                detailText = isHeadingUnavailable
-                    ? "This device does not provide heading updates."
-                    : "Waiting for location and compass readings."
+                if isHeadingUnavailable {
+                    detailText = "This device does not provide heading updates."
+                } else if currentHeading == nil, targetBearing != nil {
+                    detailText = "Waiting for true heading."
+                } else {
+                    detailText = "Waiting for location and compass readings."
+                }
             }
             return
         }
 
-        let signedAngle = Self.signedTurnAngle(from: currentHeading, to: targetBearing)
-        relativeAngle = signedAngle
+        let turnAngle = Self.relativeAngle(from: currentHeading, to: targetBearing)
+        let signedAngle = Self.signedTurnAngle(from: turnAngle)
+        relativeAngle = turnAngle
 
         if abs(signedAngle) <= 3 {
             statusText = "Facing the Qiblih"
@@ -170,9 +171,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
             statusText = "Turn right"
         }
 
-        detailText = isUsingApproximateHeading
-            ? "Approximate: using magnetic heading."
-            : "Using true heading."
+        detailText = "Using true heading."
     }
 
     private var hasLocationAuthorization: Bool {

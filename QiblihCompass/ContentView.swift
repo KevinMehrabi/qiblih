@@ -66,7 +66,7 @@ struct ContentView: View {
             ReadingTile(
                 title: "Qiblih Bearing",
                 value: formattedPreciseDegrees(locationHeadingManager.targetBearing),
-                footnote: "fixed point"
+                footnote: "rhumb line"
             )
         }
     }
@@ -80,7 +80,7 @@ struct ContentView: View {
             return "waiting"
         }
 
-        return locationHeadingManager.isUsingApproximateHeading ? "magnetic" : "true"
+        return "true"
     }
 
     private func formattedWholeDegrees(_ degrees: CLLocationDirection?) -> String {

@@ -8,9 +8,9 @@ Open `QiblihCompass.xcodeproj` in Xcode, choose the `QiblihCompass` scheme, and 
 
 The app uses CoreLocation while in use to calculate the Qiblih bearing to:
 
-- Latitude: `32.9393306`
-- Longitude: `35.0886667`
+- Latitude: `32.9445`
+- Longitude: `35.0918`
 
-The Qiblih bearing is calculated as an orientation to the fixed Bahjí coordinate in the user's local compass plane. It uses north/east components of Bahjí from the user's current coordinate and does not calculate distance, choose a shortest route, normalize longitude to shorten a path, or allow pole shortcuts.
+The Qiblih bearing is calculated as a rhumb-line bearing, which is a constant azimuth and appears as a straight line on a Mercator map. The app does not use great-circle, geodesic, CoreLocation course, or distance-based bearing logic.
 
-It uses true heading when available, falls back to magnetic heading as an approximate reading, does not use networking, and does not store location.
+It uses true heading only, does not fall back to magnetic heading, does not use networking, and does not store location.

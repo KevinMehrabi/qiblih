@@ -3,10 +3,16 @@ import CoreLocation
 import Foundation
 
 final class LocationHeadingManager: NSObject, ObservableObject {
+    private enum QiblihDirectionRule {
+        case fixedCoordinateLocalPlaneNoRoute
+    }
+
     static let qiblihCoordinate = CLLocationCoordinate2D(
         latitude: 32.9393306,
         longitude: 35.0886667
     )
+
+    private static let qiblihDirectionRule: QiblihDirectionRule = .fixedCoordinateLocalPlaneNoRoute
 
     @Published private(set) var authorizationStatus: CLAuthorizationStatus
     @Published private(set) var currentLocation: CLLocation?
@@ -61,11 +67,36 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         }
     }
 
-    static func flatMapBearing(from origin: CLLocationCoordinate2D, to destination: CLLocationCoordinate2D) -> CLLocationDirection {
-        // Flat world map: longitude is horizontal and latitude is vertical.
-        let deltaX = destination.longitude - origin.longitude
-        let deltaY = destination.latitude - origin.latitude
-        let theta = atan2(deltaX, deltaY)
+    static func qiblihBearing(from origin: CLLocationCoordinate2D) -> CLLocationDirection {
+        bearing(from: origin, to: qiblihCoordinate, rule: qiblihDirectionRule)
+    }
+
+    private static func bearing(
+        from origin: CLLocationCoordinate2D,
+        to destination: CLLocationCoordinate2D,
+        rule: QiblihDirectionRule
+    ) -> CLLocationDirection {
+        switch rule {
+        case .fixedCoordinateLocalPlaneNoRoute:
+            return fixedCoordinateLocalPlaneBearing(from: origin, to: destination)
+        }
+    }
+
+    private static func fixedCoordinateLocalPlaneBearing(
+        from origin: CLLocationCoordinate2D,
+        to destination: CLLocationCoordinate2D
+    ) -> CLLocationDirection {
+        let originLatitude = origin.latitude.radians
+        let originLongitude = origin.longitude.radians
+        let destinationLatitude = destination.latitude.radians
+        let destinationLongitude = destination.longitude.radians
+        let deltaLongitude = destinationLongitude - originLongitude
+
+        // Orientation only: no distance, no route choice, no longitude normalization.
+        let eastComponent = cos(destinationLatitude) * sin(deltaLongitude)
+        let northComponent = cos(originLatitude) * sin(destinationLatitude)
+            - sin(originLatitude) * cos(destinationLatitude) * cos(deltaLongitude)
+        let theta = atan2(eastComponent, northComponent)
 
         return normalizeDegrees(theta.degrees)
     }
@@ -97,7 +128,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
             return
         }
 
-        targetBearing = Self.flatMapBearing(from: coordinate, to: Self.qiblihCoordinate)
+        targetBearing = Self.qiblihBearing(from: coordinate)
         updateDirectionIfPossible()
     }
 

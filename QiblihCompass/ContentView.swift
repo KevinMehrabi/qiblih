@@ -57,11 +57,19 @@ struct ContentView: View {
 
     private var readings: some View {
         VStack(spacing: 12) {
-            ReadingTile(
-                title: "Heading",
-                value: formattedWholeDegrees(locationHeadingManager.currentHeading),
-                footnote: headingFootnote
-            )
+            HStack(spacing: 12) {
+                ReadingTile(
+                    title: "True Heading",
+                    value: formattedWholeDegrees(locationHeadingManager.currentHeading),
+                    footnote: "from true north"
+                )
+
+                ReadingTile(
+                    title: "Magnetic Heading",
+                    value: formattedWholeDegrees(locationHeadingManager.currentMagneticHeading),
+                    footnote: "from magnetic north"
+                )
+            }
 
             HStack(spacing: 12) {
                 ReadingTile(
@@ -81,14 +89,6 @@ struct ContentView: View {
 
     private var statusColor: Color {
         locationHeadingManager.statusText == "Facing the Qiblih" ? .qiblihGold : .primaryText
-    }
-
-    private var headingFootnote: String {
-        guard locationHeadingManager.currentHeading != nil else {
-            return "waiting"
-        }
-
-        return "true"
     }
 
     private func formattedWholeDegrees(_ degrees: CLLocationDirection?) -> String {

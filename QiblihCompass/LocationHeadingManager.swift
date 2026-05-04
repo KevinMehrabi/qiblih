@@ -148,7 +148,12 @@ final class LocationHeadingManager: NSObject, ObservableObject {
     ) -> CLLocationDirection {
         let phi1 = lat1.radians
         let phi2 = lat2.radians
-        let deltaLambda = (lon2 - lon1).radians
+        var deltaLambda = (lon2 - lon1).radians
+        if deltaLambda > Double.pi {
+            deltaLambda -= 2 * Double.pi
+        } else if deltaLambda < -Double.pi {
+            deltaLambda += 2 * Double.pi
+        }
 
         let y = sin(deltaLambda) * cos(phi2)
         let x = cos(phi1) * sin(phi2) - sin(phi1) * cos(phi2) * cos(deltaLambda)

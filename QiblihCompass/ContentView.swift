@@ -14,8 +14,7 @@ struct ContentView: View {
                 CompassDial(
                     currentHeading: locationHeadingManager.currentHeading,
                     targetBearing: locationHeadingManager.targetBearing,
-                    relativeAngle: locationHeadingManager.relativeAngle,
-                    isApproximate: locationHeadingManager.isUsingApproximateHeading
+                    relativeAngle: locationHeadingManager.relativeAngle
                 )
                 .frame(maxWidth: 360)
 
@@ -99,7 +98,6 @@ private struct CompassDial: View {
     let currentHeading: CLLocationDirection?
     let targetBearing: CLLocationDirection?
     let relativeAngle: CLLocationDirection
-    let isApproximate: Bool
 
     private var northAngle: Double {
         guard let currentHeading else {
@@ -122,27 +120,17 @@ private struct CompassDial: View {
                 .stroke(Color.primaryText.opacity(0.28), style: StrokeStyle(lineWidth: 2, lineCap: .round))
                 .padding(22)
 
-            CardinalLabels()
+            CardinalLabels(currentHeading: currentHeading)
                 .padding(34)
 
             NorthMarker()
                 .rotationEffect(.degrees(northAngle))
                 .opacity(currentHeading == nil ? 0.3 : 1)
+                .animation(.spring(response: 0.45, dampingFraction: 0.82), value: northAngle)
 
             QiblihArrow(isActive: targetBearing != nil)
                 .rotationEffect(.degrees(relativeAngle))
                 .animation(.spring(response: 0.45, dampingFraction: 0.82), value: relativeAngle)
-
-            VStack(spacing: 4) {
-                Text("Qiblih")
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(Color.primaryText)
-
-                Text(directionModeLabel)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(Color.secondaryText)
-            }
-            .padding(.top, 96)
         }
         .aspectRatio(1, contentMode: .fit)
         .accessibilityElement(children: .ignore)
@@ -155,72 +143,95 @@ private struct CompassDial: View {
         return "Compass. Current heading \(heading). Qiblih bearing \(bearing)."
     }
 
-    private var directionModeLabel: String {
-        guard currentHeading != nil else {
-            return "waiting"
-        }
-
-        return isApproximate ? "approx." : "true"
-    }
 }
 
 private struct QiblihArrow: View {
     let isActive: Bool
 
     var body: some View {
-        VStack(spacing: 0) {
-            Image(systemName: "arrow.up")
-                .font(.system(size: 78, weight: .black))
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(isActive ? Color.qiblihGold : Color.secondaryText.opacity(0.38))
+        GeometryReader { proxy in
+            let side = min(proxy.size.width, proxy.size.height)
+            let color = isActive ? Color.qiblihGold : Color.secondaryText.opacity(0.38)
 
-            Circle()
-                .fill(isActive ? Color.qiblihGold : Color.secondaryText.opacity(0.38))
-                .frame(width: 14, height: 14)
-                .padding(.top, -7)
+            ZStack {
+                Capsule()
+                    .fill(color)
+                    .frame(width: max(side * 0.035, 10), height: side * 0.29)
+                    .offset(y: -side * 0.12)
+
+                Image(systemName: "chevron.up")
+                    .font(.system(size: side * 0.17, weight: .black))
+                    .foregroundStyle(color)
+                    .offset(y: -side * 0.265)
+
+                Circle()
+                    .fill(Color.dialFill)
+                    .frame(width: side * 0.095, height: side * 0.095)
+                    .overlay(
+                        Circle()
+                            .stroke(color, lineWidth: max(side * 0.014, 4))
+                    )
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
         }
     }
 }
 
 private struct NorthMarker: View {
     var body: some View {
-        VStack(spacing: 7) {
-            Text("N")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(Color.northRed)
-
+        VStack {
             Capsule()
                 .fill(Color.northRed)
-                .frame(width: 5, height: 34)
+                .frame(width: 5, height: 36)
 
             Spacer()
         }
-        .padding(.top, 19)
+        .padding(.top, 22)
     }
 }
 
 private struct CardinalLabels: View {
+    let currentHeading: CLLocationDirection?
+
+    private let labels: [(text: String, bearing: CLLocationDirection)] = [
+        ("N", 0),
+        ("E", 90),
+        ("S", 180),
+        ("W", 270)
+    ]
+
     var body: some View {
         GeometryReader { proxy in
             let side = min(proxy.size.width, proxy.size.height)
             let center = side / 2
-            let inset: CGFloat = 18
+            let radius = (side / 2) - 18
 
             ZStack {
-                Text("N")
-                    .position(x: center, y: inset)
-                Text("E")
-                    .position(x: side - inset, y: center)
-                Text("S")
-                    .position(x: center, y: side - inset)
-                Text("W")
-                    .position(x: inset, y: center)
+                ForEach(labels, id: \.text) { label in
+                    let angle = relativeAngle(to: label.bearing)
+                    let radians = CGFloat(angle - 90) * .pi / 180
+
+                    Text(label.text)
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(label.text == "N" ? Color.northRed : Color.secondaryText)
+                        .position(
+                            x: center + cos(radians) * radius,
+                            y: center + sin(radians) * radius
+                        )
+                }
             }
             .frame(width: side, height: side)
             .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
         }
-        .font(.caption.weight(.semibold))
-        .foregroundStyle(Color.secondaryText)
+        .animation(.spring(response: 0.45, dampingFraction: 0.82), value: currentHeading ?? 0)
+    }
+
+    private func relativeAngle(to bearing: CLLocationDirection) -> CLLocationDirection {
+        guard let currentHeading else {
+            return bearing
+        }
+
+        return LocationHeadingManager.shortestSignedAngle(from: currentHeading, to: bearing)
     }
 }
 

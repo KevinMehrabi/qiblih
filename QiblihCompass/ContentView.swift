@@ -56,15 +56,39 @@ struct ContentView: View {
     }
 
     private var readings: some View {
-        ReadingTile(
-            title: "Magnetic Bearing",
-            value: formattedPreciseDegrees(locationHeadingManager.targetMagneticBearing),
-            footnote: "from magnetic north"
-        )
+        VStack(spacing: 12) {
+            ReadingTile(
+                title: "Heading",
+                value: formattedWholeDegrees(locationHeadingManager.currentHeading),
+                footnote: headingFootnote
+            )
+
+            HStack(spacing: 12) {
+                ReadingTile(
+                    title: "True Bearing",
+                    value: formattedPreciseDegrees(locationHeadingManager.targetBearing),
+                    footnote: "from true north"
+                )
+
+                ReadingTile(
+                    title: "Magnetic Bearing",
+                    value: formattedPreciseDegrees(locationHeadingManager.targetMagneticBearing),
+                    footnote: "from magnetic north"
+                )
+            }
+        }
     }
 
     private var statusColor: Color {
         locationHeadingManager.statusText == "Facing the Qiblih" ? .qiblihGold : .primaryText
+    }
+
+    private var headingFootnote: String {
+        guard locationHeadingManager.currentHeading != nil else {
+            return "waiting"
+        }
+
+        return "true"
     }
 
     private func formattedWholeDegrees(_ degrees: CLLocationDirection?) -> String {

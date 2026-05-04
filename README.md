@@ -11,6 +11,6 @@ The app uses CoreLocation while in use to calculate the Qiblih bearing to:
 - Latitude: `32.9445`
 - Longitude: `35.0918`
 
-The Qiblih bearing is calculated as a rhumb-line bearing, which is a constant azimuth and appears as a straight line on a Mercator map. The app does not use great-circle, geodesic, CoreLocation course, or distance-based bearing logic.
+The Qiblih bearing is calculated as a straight-line direction in Mercator-projected screen space. The app does not use rhumb-line, great-circle, geodesic, CoreLocation course, or distance-based bearing logic.
 
 It uses true heading only, does not fall back to magnetic heading, does not use networking, and does not store location.

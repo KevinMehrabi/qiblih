@@ -62,7 +62,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
     }
 
     static func qiblihBearing(from origin: CLLocationCoordinate2D) -> CLLocationDirection {
-        rhumbBearing(
+        projectedBearing(
             from: origin.latitude,
             lon1: origin.longitude,
             to: qiblihCoordinate.latitude,
@@ -70,28 +70,32 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         )
     }
 
-    static func rhumbBearing(
+    static func mercatorY(_ latitude: Double) -> Double {
+        let phi = latitude.radians
+        return log(tan(.pi / 4 + phi / 2))
+    }
+
+    static func projectedBearing(
         from lat1: Double,
         lon1: Double,
         to lat2: Double,
         lon2: Double
     ) -> CLLocationDirection {
-        let phi1 = lat1.radians
-        let phi2 = lat2.radians
-        var deltaLambda = (lon2 - lon1).radians
+        let x1 = lon1.radians
+        let y1 = mercatorY(lat1)
+        let x2 = lon2.radians
+        let y2 = mercatorY(lat2)
 
-        let deltaPsi = log(
-            tan(phi2 / 2 + .pi / 4) /
-            tan(phi1 / 2 + .pi / 4)
-        )
+        var dx = x2 - x1
+        let dy = y2 - y1
 
-        if abs(deltaLambda) > .pi {
-            deltaLambda = deltaLambda > 0
-                ? -(2 * .pi - deltaLambda)
-                : (2 * .pi + deltaLambda)
+        if abs(dx) > .pi {
+            dx = dx > 0
+                ? dx - 2 * .pi
+                : dx + 2 * .pi
         }
 
-        let theta = atan2(deltaLambda, deltaPsi)
+        let theta = atan2(dx, dy)
 
         return normalizeDegrees(theta.degrees)
     }

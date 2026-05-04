@@ -13,8 +13,7 @@ struct ContentView: View {
 
                 CompassDial(
                     currentHeading: locationHeadingManager.currentHeading,
-                    targetBearing: locationHeadingManager.targetBearing,
-                    relativeAngle: locationHeadingManager.relativeAngle
+                    targetBearing: locationHeadingManager.targetBearing
                 )
                 .frame(maxWidth: 360)
 
@@ -97,15 +96,6 @@ struct ContentView: View {
 private struct CompassDial: View {
     let currentHeading: CLLocationDirection?
     let targetBearing: CLLocationDirection?
-    let relativeAngle: CLLocationDirection
-
-    private var compassRotation: Double {
-        guard let currentHeading else {
-            return 0
-        }
-
-        return LocationHeadingManager.shortestSignedAngle(from: currentHeading, to: 0)
-    }
 
     var body: some View {
         ZStack {
@@ -119,19 +109,15 @@ private struct CompassDial: View {
             TickRing()
                 .stroke(Color.primaryText.opacity(0.28), style: StrokeStyle(lineWidth: 2, lineCap: .round))
                 .padding(22)
-                .rotationEffect(.degrees(compassRotation))
-                .animation(.spring(response: 0.45, dampingFraction: 0.82), value: compassRotation)
 
-            CardinalLabels(currentHeading: currentHeading)
+            CardinalLabels()
                 .padding(34)
 
-            ForwardMarker()
+            QiblihBearingMarker(bearing: targetBearing)
+                .animation(.spring(response: 0.45, dampingFraction: 0.82), value: targetBearing ?? 0)
 
-            QiblihDirectionMarker(
-                relativeAngle: relativeAngle,
-                isActive: currentHeading != nil && targetBearing != nil
-            )
-                .animation(.spring(response: 0.45, dampingFraction: 0.82), value: relativeAngle)
+            FacingMarker(heading: currentHeading)
+                .animation(.spring(response: 0.45, dampingFraction: 0.82), value: currentHeading ?? 0)
         }
         .aspectRatio(1, contentMode: .fit)
         .accessibilityElement(children: .ignore)
@@ -146,31 +132,19 @@ private struct CompassDial: View {
 
 }
 
-private struct QiblihDirectionMarker: View {
-    let relativeAngle: CLLocationDirection
-    let isActive: Bool
+private struct QiblihBearingMarker: View {
+    let bearing: CLLocationDirection?
 
     var body: some View {
         GeometryReader { proxy in
             let side = min(proxy.size.width, proxy.size.height)
             let center = CGPoint(x: proxy.size.width / 2, y: proxy.size.height / 2)
             let radius = side * 0.36
-            let lineRadius = radius - side * 0.05
-            let radians = CGFloat(relativeAngle - 90) * .pi / 180
-            let color = isActive ? Color.qiblihGold : Color.secondaryText.opacity(0.38)
+            let bearing = bearing ?? 0
+            let radians = CGFloat(bearing - 90) * .pi / 180
+            let color = self.bearing == nil ? Color.secondaryText.opacity(0.38) : Color.qiblihGold
 
             ZStack {
-                Path { path in
-                    path.move(to: center)
-                    path.addLine(
-                        to: CGPoint(
-                            x: center.x + cos(radians) * lineRadius,
-                            y: center.y + sin(radians) * lineRadius
-                        )
-                    )
-                }
-                .stroke(color, style: StrokeStyle(lineWidth: max(side * 0.022, 7), lineCap: .round))
-
                 Circle()
                     .fill(color)
                     .frame(width: side * 0.14, height: side * 0.14)
@@ -183,36 +157,60 @@ private struct QiblihDirectionMarker: View {
                         x: center.x + cos(radians) * radius,
                         y: center.y + sin(radians) * radius
                     )
-
-                Circle()
-                    .fill(Color.dialFill)
-                    .frame(width: side * 0.075, height: side * 0.075)
-                    .overlay(
-                        Circle()
-                            .stroke(color, lineWidth: max(side * 0.012, 3))
-                    )
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
     }
 }
 
-private struct ForwardMarker: View {
-    var body: some View {
-        VStack {
-            Image(systemName: "chevron.compact.up")
-                .font(.system(size: 36, weight: .bold))
-                .foregroundStyle(Color.primaryText.opacity(0.78))
+private struct FacingMarker: View {
+    let heading: CLLocationDirection?
 
-            Spacer()
+    var body: some View {
+        GeometryReader { proxy in
+            let side = min(proxy.size.width, proxy.size.height)
+            let center = CGPoint(x: proxy.size.width / 2, y: proxy.size.height / 2)
+            let radius = side * 0.28
+            let markerRadius = side * 0.325
+            let heading = heading ?? 0
+            let radians = CGFloat(heading - 90) * .pi / 180
+            let color = self.heading == nil ? Color.secondaryText.opacity(0.32) : Color.primaryText
+
+            ZStack {
+                Path { path in
+                    path.move(to: center)
+                    path.addLine(
+                        to: CGPoint(
+                            x: center.x + cos(radians) * radius,
+                            y: center.y + sin(radians) * radius
+                        )
+                    )
+                }
+                .stroke(color.opacity(0.78), style: StrokeStyle(lineWidth: max(side * 0.018, 6), lineCap: .round))
+
+                Image(systemName: "location.north.fill")
+                    .font(.system(size: side * 0.075, weight: .bold))
+                    .foregroundStyle(color)
+                    .rotationEffect(.degrees(heading))
+                    .position(
+                        x: center.x + cos(radians) * markerRadius,
+                        y: center.y + sin(radians) * markerRadius
+                    )
+
+                Circle()
+                    .fill(Color.dialFill)
+                    .frame(width: side * 0.075, height: side * 0.075)
+                    .overlay {
+                        Circle()
+                            .stroke(color.opacity(0.78), lineWidth: max(side * 0.012, 3))
+                    }
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
         }
-        .padding(.top, 12)
     }
 }
 
 private struct CardinalLabels: View {
-    let currentHeading: CLLocationDirection?
-
     private let labels: [(text: String, bearing: CLLocationDirection)] = [
         ("N", 0),
         ("E", 90),
@@ -228,8 +226,7 @@ private struct CardinalLabels: View {
 
             ZStack {
                 ForEach(labels, id: \.text) { label in
-                    let angle = relativeAngle(to: label.bearing)
-                    let radians = CGFloat(angle - 90) * .pi / 180
+                    let radians = CGFloat(label.bearing - 90) * .pi / 180
 
                     Text(label.text)
                         .font(.caption.weight(.bold))
@@ -243,15 +240,6 @@ private struct CardinalLabels: View {
             .frame(width: side, height: side)
             .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
         }
-        .animation(.spring(response: 0.45, dampingFraction: 0.82), value: currentHeading ?? 0)
-    }
-
-    private func relativeAngle(to bearing: CLLocationDirection) -> CLLocationDirection {
-        guard let currentHeading else {
-            return bearing
-        }
-
-        return LocationHeadingManager.shortestSignedAngle(from: currentHeading, to: bearing)
     }
 }
 

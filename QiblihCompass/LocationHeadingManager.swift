@@ -61,18 +61,18 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         }
     }
 
-    static func initialGreatCircleBearing(from origin: CLLocationCoordinate2D, to destination: CLLocationCoordinate2D) -> CLLocationDirection {
-        let phi1 = origin.latitude.radians
-        let lambda1 = origin.longitude.radians
-        let phi2 = destination.latitude.radians
-        let lambda2 = destination.longitude.radians
-        let deltaLambda = lambda2 - lambda1
-
-        let y = sin(deltaLambda) * cos(phi2)
-        let x = cos(phi1) * sin(phi2) - sin(phi1) * cos(phi2) * cos(deltaLambda)
-        let theta = atan2(y, x)
+    static func flatMapBearing(from origin: CLLocationCoordinate2D, to destination: CLLocationCoordinate2D) -> CLLocationDirection {
+        let deltaX = (destination.longitude - origin.longitude).radians
+        let deltaY = mercatorY(forLatitude: destination.latitude) - mercatorY(forLatitude: origin.latitude)
+        let theta = atan2(deltaX, deltaY)
 
         return normalizeDegrees(theta.degrees)
+    }
+
+    static func mercatorY(forLatitude latitude: CLLocationDegrees) -> Double {
+        let latitudeLimit = 85.05112878
+        let clampedLatitude = min(max(latitude, -latitudeLimit), latitudeLimit).radians
+        return log(tan(.pi / 4 + clampedLatitude / 2))
     }
 
     static func signedTurnAngle(from currentHeading: CLLocationDirection, to targetBearing: CLLocationDirection) -> CLLocationDirection {
@@ -102,7 +102,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
             return
         }
 
-        targetBearing = Self.initialGreatCircleBearing(from: coordinate, to: Self.qiblihCoordinate)
+        targetBearing = Self.flatMapBearing(from: coordinate, to: Self.qiblihCoordinate)
         updateDirectionIfPossible()
     }
 

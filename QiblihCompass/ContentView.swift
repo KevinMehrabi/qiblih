@@ -66,7 +66,7 @@ struct ContentView: View {
             ReadingTile(
                 title: "Qiblih Bearing",
                 value: formattedDegrees(locationHeadingManager.targetBearing),
-                footnote: "from here"
+                footnote: "flat map"
             )
         }
     }

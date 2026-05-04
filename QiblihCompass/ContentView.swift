@@ -56,18 +56,26 @@ struct ContentView: View {
     }
 
     private var readings: some View {
-        HStack(spacing: 12) {
+        VStack(spacing: 12) {
             ReadingTile(
                 title: "Heading",
                 value: formattedWholeDegrees(locationHeadingManager.currentHeading),
                 footnote: headingFootnote
             )
 
-            ReadingTile(
-                title: "Qiblih Bearing",
-                value: formattedPreciseDegrees(locationHeadingManager.targetBearing),
-                footnote: "forward azimuth"
-            )
+            HStack(spacing: 12) {
+                ReadingTile(
+                    title: "True Bearing",
+                    value: formattedPreciseDegrees(locationHeadingManager.targetBearing),
+                    footnote: "from true north"
+                )
+
+                ReadingTile(
+                    title: "Magnetic Bearing",
+                    value: formattedPreciseDegrees(locationHeadingManager.targetMagneticBearing),
+                    footnote: "from magnetic north"
+                )
+            }
         }
     }
 

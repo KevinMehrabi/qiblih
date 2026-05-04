@@ -11,7 +11,9 @@ final class LocationHeadingManager: NSObject, ObservableObject {
     @Published private(set) var authorizationStatus: CLAuthorizationStatus
     @Published private(set) var currentLocation: CLLocation?
     @Published private(set) var currentHeading: CLLocationDirection?
+    @Published private(set) var currentMagneticHeading: CLLocationDirection?
     @Published private(set) var targetBearing: CLLocationDirection?
+    @Published private(set) var targetMagneticBearing: CLLocationDirection?
     @Published private(set) var relativeAngle: CLLocationDirection = 0
     @Published private(set) var statusText = "Finding the Qiblih"
     @Published private(set) var detailText = "Allow location access and hold the phone flat."
@@ -118,12 +120,18 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         }
 
         targetBearing = Self.qiblihBearing(from: coordinate)
+        updateMagneticBearingIfPossible()
         updateDirectionIfPossible()
     }
 
     private func updateHeading(from heading: CLHeading) {
+        currentMagneticHeading = heading.magneticHeading >= 0
+            ? Self.normalizeDegrees(heading.magneticHeading)
+            : nil
+
         guard heading.trueHeading >= 0 else {
             currentHeading = nil
+            targetMagneticBearing = nil
             isUsingApproximateHeading = false
             detailText = "Waiting for true heading."
             updateDirectionIfPossible()
@@ -132,7 +140,18 @@ final class LocationHeadingManager: NSObject, ObservableObject {
 
         currentHeading = Self.normalizeDegrees(heading.trueHeading)
         isUsingApproximateHeading = false
+        updateMagneticBearingIfPossible()
         updateDirectionIfPossible()
+    }
+
+    private func updateMagneticBearingIfPossible() {
+        guard let targetBearing, let currentHeading, let currentMagneticHeading else {
+            targetMagneticBearing = nil
+            return
+        }
+
+        let declination = currentHeading - currentMagneticHeading
+        targetMagneticBearing = Self.normalizeDegrees(targetBearing - declination)
     }
 
     private func updateDirectionIfPossible() {

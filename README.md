@@ -13,4 +13,4 @@ The app uses CoreLocation while in use to calculate the Qiblih bearing to:
 
 The Qiblih bearing is calculated as the initial great-circle bearing, also called the forward azimuth. The app does not use rhumb-line, Mercator-projected, CoreLocation course, or distance-based bearing logic.
 
-It uses true heading only, does not fall back to magnetic heading, does not use networking, and does not store location.
+It uses true heading for direction guidance, displays Qiblih bearing from both true north and magnetic north, does not use networking, and does not store location.

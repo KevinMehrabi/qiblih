@@ -59,13 +59,13 @@ struct ContentView: View {
         HStack(spacing: 12) {
             ReadingTile(
                 title: "Heading",
-                value: formattedDegrees(locationHeadingManager.currentHeading),
+                value: formattedWholeDegrees(locationHeadingManager.currentHeading),
                 footnote: headingFootnote
             )
 
             ReadingTile(
                 title: "Qiblih Bearing",
-                value: formattedDegrees(locationHeadingManager.targetBearing),
+                value: formattedPreciseDegrees(locationHeadingManager.targetBearing),
                 footnote: "flat map"
             )
         }
@@ -83,7 +83,7 @@ struct ContentView: View {
         return locationHeadingManager.isUsingApproximateHeading ? "magnetic" : "true"
     }
 
-    private func formattedDegrees(_ degrees: CLLocationDirection?) -> String {
+    private func formattedWholeDegrees(_ degrees: CLLocationDirection?) -> String {
         guard let degrees else {
             return "--"
         }
@@ -91,6 +91,21 @@ struct ContentView: View {
         let roundedDegrees = Int(degrees.rounded()) % 360
         return "\(roundedDegrees)°"
     }
+
+    private func formattedPreciseDegrees(_ degrees: CLLocationDirection?) -> String {
+        guard let degrees else {
+            return "--"
+        }
+
+        return "\(Self.bearingFormatter.string(from: NSNumber(value: degrees)) ?? "--")°"
+    }
+
+    private static let bearingFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.minimumFractionDigits = 1
+        formatter.maximumFractionDigits = 1
+        return formatter
+    }()
 }
 
 private struct CompassDial: View {

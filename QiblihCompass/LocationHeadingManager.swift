@@ -62,17 +62,12 @@ final class LocationHeadingManager: NSObject, ObservableObject {
     }
 
     static func flatMapBearing(from origin: CLLocationCoordinate2D, to destination: CLLocationCoordinate2D) -> CLLocationDirection {
-        let deltaX = (destination.longitude - origin.longitude).radians
-        let deltaY = mercatorY(forLatitude: destination.latitude) - mercatorY(forLatitude: origin.latitude)
+        // Flat world map: longitude is horizontal and latitude is vertical.
+        let deltaX = destination.longitude - origin.longitude
+        let deltaY = destination.latitude - origin.latitude
         let theta = atan2(deltaX, deltaY)
 
         return normalizeDegrees(theta.degrees)
-    }
-
-    static func mercatorY(forLatitude latitude: CLLocationDegrees) -> Double {
-        let latitudeLimit = 85.05112878
-        let clampedLatitude = min(max(latitude, -latitudeLimit), latitudeLimit).radians
-        return log(tan(.pi / 4 + clampedLatitude / 2))
     }
 
     static func signedTurnAngle(from currentHeading: CLLocationDirection, to targetBearing: CLLocationDirection) -> CLLocationDirection {

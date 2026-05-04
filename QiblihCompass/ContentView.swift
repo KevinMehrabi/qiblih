@@ -65,13 +65,13 @@ struct ContentView: View {
             HStack(spacing: 12) {
                 ReadingTile(
                     title: "True Heading",
-                    value: formattedWholeDegrees(locationHeadingManager.currentHeading),
+                    value: formattedDegrees(locationHeadingManager.currentHeading),
                     footnote: "from true north"
                 )
 
                 ReadingTile(
                     title: "Magnetic Heading",
-                    value: formattedWholeDegrees(locationHeadingManager.currentMagneticHeading),
+                    value: formattedDegrees(locationHeadingManager.currentMagneticHeading),
                     footnote: "from magnetic north"
                 )
             }
@@ -79,13 +79,13 @@ struct ContentView: View {
             HStack(spacing: 12) {
                 ReadingTile(
                     title: "True Bearing",
-                    value: formattedPreciseDegrees(locationHeadingManager.targetBearing),
+                    value: formattedDegrees(locationHeadingManager.targetBearing),
                     footnote: "\(locationHeadingManager.bearingMode.title) from true north"
                 )
 
                 ReadingTile(
                     title: "Magnetic Bearing",
-                    value: formattedPreciseDegrees(locationHeadingManager.targetMagneticBearing),
+                    value: formattedDegrees(locationHeadingManager.targetMagneticBearing),
                     footnote: "\(locationHeadingManager.bearingMode.title) from magnetic north"
                 )
             }
@@ -96,27 +96,22 @@ struct ContentView: View {
         locationHeadingManager.statusText == "Facing the Qiblih" ? .qiblihGold : .primaryText
     }
 
-    private func formattedWholeDegrees(_ degrees: CLLocationDirection?) -> String {
+    private func formattedDegrees(_ degrees: CLLocationDirection?) -> String {
         guard let degrees else {
             return "--"
         }
 
-        let roundedDegrees = Int(degrees.rounded()) % 360
-        return "\(roundedDegrees)°"
+        let normalizedDegrees = LocationHeadingManager.normalizeDegrees(degrees)
+        let roundedDegrees = (normalizedDegrees * 100).rounded() / 100
+        let displayDegrees = roundedDegrees >= 360 ? 0 : roundedDegrees
+
+        return "\(Self.degreeFormatter.string(from: NSNumber(value: displayDegrees)) ?? "--")°"
     }
 
-    private func formattedPreciseDegrees(_ degrees: CLLocationDirection?) -> String {
-        guard let degrees else {
-            return "--"
-        }
-
-        return "\(Self.bearingFormatter.string(from: NSNumber(value: degrees)) ?? "--")°"
-    }
-
-    private static let bearingFormatter: NumberFormatter = {
+    private static let degreeFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
-        formatter.minimumFractionDigits = 1
-        formatter.maximumFractionDigits = 1
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
         return formatter
     }()
 }

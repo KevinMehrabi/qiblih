@@ -139,23 +139,36 @@ private struct QiblihBearingMarker: View {
         GeometryReader { proxy in
             let side = min(proxy.size.width, proxy.size.height)
             let center = CGPoint(x: proxy.size.width / 2, y: proxy.size.height / 2)
-            let radius = side * 0.36
             let bearing = bearing ?? 0
             let radians = CGFloat(bearing - 90) * .pi / 180
             let color = self.bearing == nil ? Color.secondaryText.opacity(0.38) : Color.qiblihGold
+            let innerRadius = side * 0.47
+            let outerRadius = side * 0.515
+            let labelRadius = side * 0.43
 
             ZStack {
-                Circle()
-                    .fill(color)
-                    .frame(width: side * 0.14, height: side * 0.14)
-                    .overlay {
-                        Text("Q")
-                            .font(.system(size: side * 0.058, weight: .bold, design: .rounded))
-                            .foregroundStyle(Color.dialFill)
-                    }
+                Path { path in
+                    path.move(
+                        to: CGPoint(
+                            x: center.x + cos(radians) * innerRadius,
+                            y: center.y + sin(radians) * innerRadius
+                        )
+                    )
+                    path.addLine(
+                        to: CGPoint(
+                            x: center.x + cos(radians) * outerRadius,
+                            y: center.y + sin(radians) * outerRadius
+                        )
+                    )
+                }
+                .stroke(color, style: StrokeStyle(lineWidth: max(side * 0.018, 6), lineCap: .round))
+
+                Text("Q")
+                    .font(.system(size: side * 0.04, weight: .bold, design: .rounded))
+                    .foregroundStyle(color)
                     .position(
-                        x: center.x + cos(radians) * radius,
-                        y: center.y + sin(radians) * radius
+                        x: center.x + cos(radians) * labelRadius,
+                        y: center.y + sin(radians) * labelRadius
                     )
             }
             .frame(width: proxy.size.width, height: proxy.size.height)

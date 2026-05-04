@@ -13,7 +13,8 @@ struct ContentView: View {
 
                 CompassDial(
                     currentHeading: locationHeadingManager.currentHeading,
-                    targetBearing: locationHeadingManager.targetBearing
+                    targetBearing: locationHeadingManager.targetBearing,
+                    relativeAngle: locationHeadingManager.relativeAngle
                 )
                 .frame(maxWidth: 360)
 
@@ -64,9 +65,12 @@ struct ContentView: View {
             )
 
             ReadingTile(
-                title: "Qiblih Bearing",
-                value: formattedPreciseDegrees(locationHeadingManager.targetBearing),
-                footnote: "flat map"
+                title: "Qiblih",
+                value: formattedTurnAngle(
+                    locationHeadingManager.relativeAngle,
+                    isReady: locationHeadingManager.currentHeading != nil && locationHeadingManager.targetBearing != nil
+                ),
+                footnote: "from facing"
             )
         }
     }
@@ -92,12 +96,18 @@ struct ContentView: View {
         return "\(roundedDegrees)°"
     }
 
-    private func formattedPreciseDegrees(_ degrees: CLLocationDirection?) -> String {
-        guard let degrees else {
+    private func formattedTurnAngle(_ angle: CLLocationDirection, isReady: Bool) -> String {
+        guard isReady else {
             return "--"
         }
 
-        return "\(Self.bearingFormatter.string(from: NSNumber(value: degrees)) ?? "--")°"
+        if abs(angle) <= 3 {
+            return "Ahead"
+        }
+
+        let direction = angle < 0 ? "left" : "right"
+        let degrees = Self.bearingFormatter.string(from: NSNumber(value: abs(angle))) ?? "--"
+        return "\(degrees)° \(direction)"
     }
 
     private static let bearingFormatter: NumberFormatter = {
@@ -111,6 +121,7 @@ struct ContentView: View {
 private struct CompassDial: View {
     let currentHeading: CLLocationDirection?
     let targetBearing: CLLocationDirection?
+    let relativeAngle: CLLocationDirection
 
     var body: some View {
         ZStack {
@@ -121,17 +132,21 @@ private struct CompassDial: View {
             Circle()
                 .strokeBorder(Color.primaryText.opacity(0.08), lineWidth: 1)
 
-            TickRing()
-                .stroke(Color.primaryText.opacity(0.28), style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                .padding(22)
+            ZStack {
+                TickRing()
+                    .stroke(Color.primaryText.opacity(0.28), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                    .padding(22)
 
-            CardinalLabels()
-                .padding(34)
+                CardinalLabels()
+                    .padding(34)
+            }
+            .rotationEffect(.degrees(-(currentHeading ?? 0)))
+            .animation(.spring(response: 0.45, dampingFraction: 0.82), value: currentHeading ?? 0)
 
-            QiblihBearingMarker(bearing: targetBearing)
-                .animation(.spring(response: 0.45, dampingFraction: 0.82), value: targetBearing ?? 0)
+            QiblihBearingMarker(bearing: qiblihAngleFromFacing)
+                .animation(.spring(response: 0.45, dampingFraction: 0.82), value: qiblihAngleFromFacing ?? 0)
 
-            FacingMarker(heading: currentHeading)
+            FacingMarker(heading: currentHeading == nil ? nil : 0)
                 .animation(.spring(response: 0.45, dampingFraction: 0.82), value: currentHeading ?? 0)
         }
         .aspectRatio(1, contentMode: .fit)
@@ -139,10 +154,19 @@ private struct CompassDial: View {
         .accessibilityLabel(accessibilityText)
     }
 
+    private var qiblihAngleFromFacing: CLLocationDirection? {
+        guard currentHeading != nil, targetBearing != nil else {
+            return nil
+        }
+
+        return LocationHeadingManager.normalizeDegrees(relativeAngle)
+    }
+
     private var accessibilityText: String {
         let heading = currentHeading.map { "\(Int($0.rounded())) degrees" } ?? "unknown heading"
         let bearing = targetBearing.map { "\(Int($0.rounded())) degrees" } ?? "unknown Qiblih bearing"
-        return "Compass. Current heading \(heading). Qiblih bearing \(bearing)."
+        let turn = qiblihAngleFromFacing.map { "\(Int($0.rounded())) degrees from the top of the phone" } ?? "unknown turn direction"
+        return "Compass. Current heading \(heading). Qiblih bearing \(bearing). Qiblih marker \(turn)."
     }
 
 }
@@ -332,6 +356,8 @@ private struct ReadingTile: View {
             Text(value)
                 .font(.title3.monospacedDigit().weight(.semibold))
                 .foregroundStyle(Color.primaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
 
             Text(footnote)
                 .font(.caption2.weight(.medium))

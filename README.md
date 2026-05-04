@@ -13,4 +13,6 @@ The app uses CoreLocation while in use to calculate the flat-map bearing to:
 
 The Qiblih bearing is calculated from the straight-line direction on a simple flat world map: longitude is horizontal, latitude is vertical, and the vector runs from the user's current coordinate to Bahjí. It does not use a great-circle bearing or Mercator latitude stretching.
 
+The compass face is oriented around the phone: the top of the screen is forward, the cardinal labels rotate from the current heading, and the Q marker shows the turn angle from the direction the user is facing.
+
 It uses true heading when available, falls back to magnetic heading as an approximate reading, does not use networking, and does not store location.

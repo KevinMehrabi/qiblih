@@ -12,8 +12,8 @@ struct ContentView: View {
                 header
 
                 CompassDial(
-                    currentHeading: locationHeadingManager.currentHeading,
-                    targetBearing: locationHeadingManager.targetBearing
+                    qiblihAngle: locationHeadingManager.relativeAngle,
+                    hasDirection: locationHeadingManager.currentHeading != nil && locationHeadingManager.targetBearing != nil
                 )
                 .frame(maxWidth: 360)
 
@@ -109,30 +109,28 @@ struct ContentView: View {
 }
 
 private struct CompassDial: View {
-    let currentHeading: CLLocationDirection?
-    let targetBearing: CLLocationDirection?
+    let qiblihAngle: CLLocationDirection
+    let hasDirection: Bool
 
     var body: some View {
         ZStack {
             Circle()
                 .fill(Color.dialFill)
                 .shadow(color: .black.opacity(0.08), radius: 24, y: 12)
+                .padding(18)
 
             Circle()
                 .strokeBorder(Color.primaryText.opacity(0.08), lineWidth: 1)
+                .padding(18)
 
             TickRing()
-                .stroke(Color.primaryText.opacity(0.28), style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                .padding(22)
+                .stroke(Color.primaryText.opacity(0.16), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                .padding(38)
 
-            CardinalLabels()
-                .padding(34)
+            QiblihDirectionMarker(angle: hasDirection ? qiblihAngle : nil)
+                .animation(.spring(response: 0.45, dampingFraction: 0.82), value: hasDirection ? qiblihAngle : 0)
 
-            QiblihBearingMarker(bearing: targetBearing)
-                .animation(.spring(response: 0.45, dampingFraction: 0.82), value: targetBearing ?? 0)
-
-            FacingMarker(heading: currentHeading)
-                .animation(.spring(response: 0.45, dampingFraction: 0.82), value: currentHeading ?? 0)
+            ForwardPointer(isActive: hasDirection)
         }
         .aspectRatio(1, contentMode: .fit)
         .accessibilityElement(children: .ignore)
@@ -140,26 +138,25 @@ private struct CompassDial: View {
     }
 
     private var accessibilityText: String {
-        let heading = currentHeading.map { "\(Int($0.rounded())) degrees" } ?? "unknown heading"
-        let bearing = targetBearing.map { "\(Int($0.rounded())) degrees" } ?? "unknown Qiblih bearing"
-        return "Compass. Current heading \(heading). Qiblih bearing \(bearing)."
+        let angle = hasDirection ? "\(Int(qiblihAngle.rounded())) degrees from phone forward" : "unknown direction"
+        return "Qiblih direction. Marker is \(angle)."
     }
 
 }
 
-private struct QiblihBearingMarker: View {
-    let bearing: CLLocationDirection?
+private struct QiblihDirectionMarker: View {
+    let angle: CLLocationDirection?
 
     var body: some View {
         GeometryReader { proxy in
             let side = min(proxy.size.width, proxy.size.height)
             let center = CGPoint(x: proxy.size.width / 2, y: proxy.size.height / 2)
-            let bearing = bearing ?? 0
-            let radians = CGFloat(bearing - 90) * .pi / 180
-            let color = self.bearing == nil ? Color.secondaryText.opacity(0.38) : Color.qiblihGold
-            let innerRadius = side * 0.47
-            let outerRadius = side * 0.515
-            let labelRadius = side * 0.43
+            let angle = angle ?? 0
+            let radians = CGFloat(angle - 90) * .pi / 180
+            let color = self.angle == nil ? Color.secondaryText.opacity(0.34) : Color.qiblihGold
+            let innerRadius = side * 0.435
+            let outerRadius = side * 0.49
+            let labelRadius = side * 0.505
 
             ZStack {
                 Path { path in
@@ -179,7 +176,7 @@ private struct QiblihBearingMarker: View {
                 .stroke(color, style: StrokeStyle(lineWidth: max(side * 0.018, 6), lineCap: .round))
 
                 Text("Q")
-                    .font(.system(size: side * 0.04, weight: .bold, design: .rounded))
+                    .font(.system(size: side * 0.035, weight: .bold, design: .rounded))
                     .foregroundStyle(color)
                     .position(
                         x: center.x + cos(radians) * labelRadius,
@@ -191,54 +188,29 @@ private struct QiblihBearingMarker: View {
     }
 }
 
-private struct FacingMarker: View {
-    let heading: CLLocationDirection?
+private struct ForwardPointer: View {
+    let isActive: Bool
 
     var body: some View {
         GeometryReader { proxy in
             let side = min(proxy.size.width, proxy.size.height)
             let center = CGPoint(x: proxy.size.width / 2, y: proxy.size.height / 2)
-            let heading = heading ?? 0
-            let radians = CGFloat(heading - 90) * .pi / 180
-            let color = self.heading == nil ? Color.secondaryText.opacity(0.32) : Color.primaryText
-            let shaftWidth = max(side * 0.018, 6)
-            let tipRadius = side * 0.35
-            let headLength = side * 0.09
-            let headHalfWidth = side * 0.045
-            let unit = CGPoint(x: cos(radians), y: sin(radians))
-            let perpendicular = CGPoint(x: -unit.y, y: unit.x)
-            let tip = CGPoint(
-                x: center.x + unit.x * tipRadius,
-                y: center.y + unit.y * tipRadius
-            )
-            let headBase = CGPoint(
-                x: tip.x - unit.x * headLength,
-                y: tip.y - unit.y * headLength
-            )
-            let shaftEnd = CGPoint(
-                x: headBase.x - unit.x * (shaftWidth * 0.3),
-                y: headBase.y - unit.y * (shaftWidth * 0.3)
-            )
-            let headLeft = CGPoint(
-                x: headBase.x + perpendicular.x * headHalfWidth,
-                y: headBase.y + perpendicular.y * headHalfWidth
-            )
-            let headRight = CGPoint(
-                x: headBase.x - perpendicular.x * headHalfWidth,
-                y: headBase.y - perpendicular.y * headHalfWidth
-            )
+            let color = isActive ? Color.primaryText : Color.secondaryText.opacity(0.32)
+            let tip = CGPoint(x: center.x, y: center.y - side * 0.34)
+            let headBaseY = tip.y + side * 0.09
+            let headHalfWidth = side * 0.05
+            let shaftHalfWidth = max(side * 0.011, 4)
+            let shaftBottomY = center.y + side * 0.02
 
             ZStack {
                 Path { path in
-                    path.move(to: center)
-                    path.addLine(to: shaftEnd)
-                }
-                .stroke(color.opacity(0.78), style: StrokeStyle(lineWidth: shaftWidth, lineCap: .round))
-
-                Path { path in
                     path.move(to: tip)
-                    path.addLine(to: headLeft)
-                    path.addLine(to: headRight)
+                    path.addLine(to: CGPoint(x: center.x + headHalfWidth, y: headBaseY))
+                    path.addLine(to: CGPoint(x: center.x + shaftHalfWidth, y: headBaseY))
+                    path.addLine(to: CGPoint(x: center.x + shaftHalfWidth, y: shaftBottomY))
+                    path.addLine(to: CGPoint(x: center.x - shaftHalfWidth, y: shaftBottomY))
+                    path.addLine(to: CGPoint(x: center.x - shaftHalfWidth, y: headBaseY))
+                    path.addLine(to: CGPoint(x: center.x - headHalfWidth, y: headBaseY))
                     path.closeSubpath()
                 }
                 .fill(color)
@@ -252,39 +224,6 @@ private struct FacingMarker: View {
                     }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
-        }
-    }
-}
-
-private struct CardinalLabels: View {
-    private let labels: [(text: String, bearing: CLLocationDirection)] = [
-        ("N", 0),
-        ("E", 90),
-        ("S", 180),
-        ("W", 270)
-    ]
-
-    var body: some View {
-        GeometryReader { proxy in
-            let side = min(proxy.size.width, proxy.size.height)
-            let center = side / 2
-            let radius = (side / 2) - 18
-
-            ZStack {
-                ForEach(labels, id: \.text) { label in
-                    let radians = CGFloat(label.bearing - 90) * .pi / 180
-
-                    Text(label.text)
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(label.text == "N" ? Color.northRed : Color.secondaryText)
-                        .position(
-                            x: center + cos(radians) * radius,
-                            y: center + sin(radians) * radius
-                        )
-                }
-            }
-            .frame(width: side, height: side)
-            .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
         }
     }
 }
@@ -370,7 +309,6 @@ private extension Color {
     static let primaryText = Color(red: 0.10, green: 0.16, blue: 0.18)
     static let secondaryText = Color(red: 0.34, green: 0.44, blue: 0.45)
     static let qiblihGold = Color(red: 0.74, green: 0.54, blue: 0.18)
-    static let northRed = Color(red: 0.72, green: 0.18, blue: 0.18)
 }
 
 private struct ContentView_Previews: PreviewProvider {

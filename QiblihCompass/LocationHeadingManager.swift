@@ -2,6 +2,24 @@ import Combine
 import CoreLocation
 import Foundation
 
+enum BearingMode: String, CaseIterable, Identifiable {
+    case mercator
+    case azimuth
+
+    var id: String {
+        rawValue
+    }
+
+    var title: String {
+        switch self {
+        case .mercator:
+            "Mercator"
+        case .azimuth:
+            "Azimuth"
+        }
+    }
+}
+
 final class LocationHeadingManager: NSObject, ObservableObject {
     static let qiblihCoordinate = CLLocationCoordinate2D(
         latitude: 32.9445,
@@ -12,6 +30,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
     @Published private(set) var currentLocation: CLLocation?
     @Published private(set) var currentHeading: CLLocationDirection?
     @Published private(set) var currentMagneticHeading: CLLocationDirection?
+    @Published private(set) var bearingMode: BearingMode = .mercator
     @Published private(set) var targetBearing: CLLocationDirection?
     @Published private(set) var targetMagneticBearing: CLLocationDirection?
     @Published private(set) var relativeAngle: CLLocationDirection = 0
@@ -63,13 +82,62 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         }
     }
 
-    static func qiblihBearing(from origin: CLLocationCoordinate2D) -> CLLocationDirection {
-        initialGreatCircleBearing(
-            from: origin.latitude,
-            lon1: origin.longitude,
-            to: qiblihCoordinate.latitude,
-            lon2: qiblihCoordinate.longitude
-        )
+    func setBearingMode(_ mode: BearingMode) {
+        guard bearingMode != mode else {
+            return
+        }
+
+        bearingMode = mode
+        updateBearingIfPossible()
+    }
+
+    static func qiblihBearing(from origin: CLLocationCoordinate2D, mode: BearingMode) -> CLLocationDirection {
+        switch mode {
+        case .mercator:
+            mercatorBearing(
+                from: origin.latitude,
+                lon1: origin.longitude,
+                to: qiblihCoordinate.latitude,
+                lon2: qiblihCoordinate.longitude
+            )
+        case .azimuth:
+            initialGreatCircleBearing(
+                from: origin.latitude,
+                lon1: origin.longitude,
+                to: qiblihCoordinate.latitude,
+                lon2: qiblihCoordinate.longitude
+            )
+        }
+    }
+
+    static func mercatorBearing(
+        from lat1: Double,
+        lon1: Double,
+        to lat2: Double,
+        lon2: Double
+    ) -> CLLocationDirection {
+        let x1 = lon1.radians
+        let y1 = mercatorY(lat1)
+        let x2 = lon2.radians
+        let y2 = mercatorY(lat2)
+
+        var dx = x2 - x1
+        let dy = y2 - y1
+
+        if abs(dx) > .pi {
+            dx = dx > 0
+                ? dx - 2 * .pi
+                : dx + 2 * .pi
+        }
+
+        let theta = atan2(dx, dy)
+
+        return normalizeDegrees(theta.degrees)
+    }
+
+    static func mercatorY(_ latitude: Double) -> Double {
+        let phi = latitude.radians
+        return log(tan(.pi / 4 + phi / 2))
     }
 
     static func initialGreatCircleBearing(
@@ -84,7 +152,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
 
         let y = sin(deltaLambda) * cos(phi2)
         let x = cos(phi1) * sin(phi2) - sin(phi1) * cos(phi2) * cos(deltaLambda)
-        let theta = atan2(x, y)
+        let theta = atan2(y, x)
 
         return normalizeDegrees(theta.degrees)
     }
@@ -119,7 +187,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
             return
         }
 
-        targetBearing = Self.qiblihBearing(from: coordinate)
+        targetBearing = Self.qiblihBearing(from: coordinate, mode: bearingMode)
         updateMagneticBearingIfPossible()
         updateDirectionIfPossible()
     }

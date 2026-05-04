@@ -11,6 +11,11 @@ struct ContentView: View {
             VStack(spacing: 28) {
                 header
 
+                BearingModeSelector(
+                    selection: locationHeadingManager.bearingMode,
+                    onSelect: { locationHeadingManager.setBearingMode($0) }
+                )
+
                 CompassDial(
                     qiblihAngle: locationHeadingManager.relativeAngle,
                     hasDirection: locationHeadingManager.currentHeading != nil && locationHeadingManager.targetBearing != nil
@@ -75,13 +80,13 @@ struct ContentView: View {
                 ReadingTile(
                     title: "True Bearing",
                     value: formattedPreciseDegrees(locationHeadingManager.targetBearing),
-                    footnote: "from true north"
+                    footnote: "\(locationHeadingManager.bearingMode.title) from true north"
                 )
 
                 ReadingTile(
                     title: "Magnetic Bearing",
                     value: formattedPreciseDegrees(locationHeadingManager.targetMagneticBearing),
-                    footnote: "from magnetic north"
+                    footnote: "\(locationHeadingManager.bearingMode.title) from magnetic north"
                 )
             }
         }
@@ -114,6 +119,45 @@ struct ContentView: View {
         formatter.maximumFractionDigits = 1
         return formatter
     }()
+}
+
+private struct BearingModeSelector: View {
+    let selection: BearingMode
+    let onSelect: (BearingMode) -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(BearingMode.allCases) { mode in
+                Button {
+                    onSelect(mode)
+                } label: {
+                    Text(mode.title)
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                        .foregroundStyle(selection == mode ? Color.dialFill : Color.primaryText)
+                        .background {
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(selection == mode ? Color.primaryText : Color.white.opacity(0.64))
+                        }
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(
+                                    selection == mode ? Color.primaryText.opacity(0.28) : Color.primaryText.opacity(0.1),
+                                    lineWidth: 1
+                                )
+                        }
+                        .shadow(
+                            color: selection == mode ? .black.opacity(0.18) : .clear,
+                            radius: 1,
+                            y: selection == mode ? 1 : 0
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selection == mode ? .isSelected : [])
+            }
+        }
+    }
 }
 
 private struct CompassDial: View {

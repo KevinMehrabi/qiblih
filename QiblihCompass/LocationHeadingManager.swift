@@ -130,7 +130,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
                 : dx + 2 * .pi
         }
 
-        let theta = atan2(dy, dx)
+        let theta = atan2(dx, dy)
 
         return normalizeDegrees(theta.degrees)
     }

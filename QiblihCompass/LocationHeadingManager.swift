@@ -61,7 +61,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         }
     }
 
-    static func bearing(from origin: CLLocationCoordinate2D, to destination: CLLocationCoordinate2D) -> CLLocationDirection {
+    static func initialGreatCircleBearing(from origin: CLLocationCoordinate2D, to destination: CLLocationCoordinate2D) -> CLLocationDirection {
         let phi1 = origin.latitude.radians
         let lambda1 = origin.longitude.radians
         let phi2 = destination.latitude.radians
@@ -75,7 +75,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         return normalizeDegrees(theta.degrees)
     }
 
-    static func shortestSignedAngle(from currentHeading: CLLocationDirection, to targetBearing: CLLocationDirection) -> CLLocationDirection {
+    static func signedTurnAngle(from currentHeading: CLLocationDirection, to targetBearing: CLLocationDirection) -> CLLocationDirection {
         let delta = normalizeDegrees(targetBearing - currentHeading + 180) - 180
         return delta == -180 ? 180 : delta
     }
@@ -102,7 +102,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
             return
         }
 
-        targetBearing = Self.bearing(from: coordinate, to: Self.qiblihCoordinate)
+        targetBearing = Self.initialGreatCircleBearing(from: coordinate, to: Self.qiblihCoordinate)
         updateDirectionIfPossible()
     }
 
@@ -133,7 +133,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
             return
         }
 
-        let signedAngle = Self.shortestSignedAngle(from: currentHeading, to: targetBearing)
+        let signedAngle = Self.signedTurnAngle(from: currentHeading, to: targetBearing)
         relativeAngle = signedAngle
 
         if abs(signedAngle) <= 3 {

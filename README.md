@@ -11,4 +11,6 @@ The app uses CoreLocation while in use to calculate the geographic bearing to:
 - Latitude: `32.9393306`
 - Longitude: `35.0886667`
 
+The Qiblih bearing is calculated as an initial great-circle bearing from the user's current coordinate to Bahjí. The separate turn angle is only used to choose the shorter left/right rotation on the compass face.
+
 It uses true heading when available, falls back to magnetic heading as an approximate reading, does not use networking, and does not store location.

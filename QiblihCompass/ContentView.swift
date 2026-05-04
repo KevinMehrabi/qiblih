@@ -99,7 +99,7 @@ private struct CompassDial: View {
     let targetBearing: CLLocationDirection?
     let relativeAngle: CLLocationDirection
 
-    private var northAngle: Double {
+    private var compassRotation: Double {
         guard let currentHeading else {
             return 0
         }
@@ -119,17 +119,18 @@ private struct CompassDial: View {
             TickRing()
                 .stroke(Color.primaryText.opacity(0.28), style: StrokeStyle(lineWidth: 2, lineCap: .round))
                 .padding(22)
+                .rotationEffect(.degrees(compassRotation))
+                .animation(.spring(response: 0.45, dampingFraction: 0.82), value: compassRotation)
 
             CardinalLabels(currentHeading: currentHeading)
                 .padding(34)
 
-            NorthMarker()
-                .rotationEffect(.degrees(northAngle))
-                .opacity(currentHeading == nil ? 0.3 : 1)
-                .animation(.spring(response: 0.45, dampingFraction: 0.82), value: northAngle)
+            ForwardMarker()
 
-            QiblihArrow(isActive: targetBearing != nil)
-                .rotationEffect(.degrees(relativeAngle))
+            QiblihDirectionMarker(
+                relativeAngle: relativeAngle,
+                isActive: currentHeading != nil && targetBearing != nil
+            )
                 .animation(.spring(response: 0.45, dampingFraction: 0.82), value: relativeAngle)
         }
         .aspectRatio(1, contentMode: .fit)
@@ -145,31 +146,50 @@ private struct CompassDial: View {
 
 }
 
-private struct QiblihArrow: View {
+private struct QiblihDirectionMarker: View {
+    let relativeAngle: CLLocationDirection
     let isActive: Bool
 
     var body: some View {
         GeometryReader { proxy in
             let side = min(proxy.size.width, proxy.size.height)
+            let center = CGPoint(x: proxy.size.width / 2, y: proxy.size.height / 2)
+            let radius = side * 0.36
+            let lineRadius = radius - side * 0.05
+            let radians = CGFloat(relativeAngle - 90) * .pi / 180
             let color = isActive ? Color.qiblihGold : Color.secondaryText.opacity(0.38)
 
             ZStack {
-                Capsule()
-                    .fill(color)
-                    .frame(width: max(side * 0.035, 10), height: side * 0.29)
-                    .offset(y: -side * 0.12)
+                Path { path in
+                    path.move(to: center)
+                    path.addLine(
+                        to: CGPoint(
+                            x: center.x + cos(radians) * lineRadius,
+                            y: center.y + sin(radians) * lineRadius
+                        )
+                    )
+                }
+                .stroke(color, style: StrokeStyle(lineWidth: max(side * 0.022, 7), lineCap: .round))
 
-                Image(systemName: "chevron.up")
-                    .font(.system(size: side * 0.17, weight: .black))
-                    .foregroundStyle(color)
-                    .offset(y: -side * 0.265)
+                Circle()
+                    .fill(color)
+                    .frame(width: side * 0.14, height: side * 0.14)
+                    .overlay {
+                        Text("Q")
+                            .font(.system(size: side * 0.058, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color.dialFill)
+                    }
+                    .position(
+                        x: center.x + cos(radians) * radius,
+                        y: center.y + sin(radians) * radius
+                    )
 
                 Circle()
                     .fill(Color.dialFill)
-                    .frame(width: side * 0.095, height: side * 0.095)
+                    .frame(width: side * 0.075, height: side * 0.075)
                     .overlay(
                         Circle()
-                            .stroke(color, lineWidth: max(side * 0.014, 4))
+                            .stroke(color, lineWidth: max(side * 0.012, 3))
                     )
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
@@ -177,16 +197,16 @@ private struct QiblihArrow: View {
     }
 }
 
-private struct NorthMarker: View {
+private struct ForwardMarker: View {
     var body: some View {
         VStack {
-            Capsule()
-                .fill(Color.northRed)
-                .frame(width: 5, height: 36)
+            Image(systemName: "chevron.compact.up")
+                .font(.system(size: 36, weight: .bold))
+                .foregroundStyle(Color.primaryText.opacity(0.78))
 
             Spacer()
         }
-        .padding(.top, 22)
+        .padding(.top, 12)
     }
 }
 

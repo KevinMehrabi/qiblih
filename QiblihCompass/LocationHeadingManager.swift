@@ -62,7 +62,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
     }
 
     static func qiblihBearing(from origin: CLLocationCoordinate2D) -> CLLocationDirection {
-        projectedBearing(
+        initialGreatCircleBearing(
             from: origin.latitude,
             lon1: origin.longitude,
             to: qiblihCoordinate.latitude,
@@ -70,32 +70,19 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         )
     }
 
-    static func mercatorY(_ latitude: Double) -> Double {
-        let phi = latitude.radians
-        return log(tan(.pi / 4 + phi / 2))
-    }
-
-    static func projectedBearing(
+    static func initialGreatCircleBearing(
         from lat1: Double,
         lon1: Double,
         to lat2: Double,
         lon2: Double
     ) -> CLLocationDirection {
-        let x1 = lon1.radians
-        let y1 = mercatorY(lat1)
-        let x2 = lon2.radians
-        let y2 = mercatorY(lat2)
+        let phi1 = lat1.radians
+        let phi2 = lat2.radians
+        let deltaLambda = (lon2 - lon1).radians
 
-        var dx = x2 - x1
-        let dy = y2 - y1
-
-        if abs(dx) > .pi {
-            dx = dx > 0
-                ? dx - 2 * .pi
-                : dx + 2 * .pi
-        }
-
-        let theta = atan2(dx, dy)
+        let y = sin(deltaLambda) * cos(phi2)
+        let x = cos(phi1) * sin(phi2) - sin(phi1) * cos(phi2) * cos(deltaLambda)
+        let theta = atan2(y, x)
 
         return normalizeDegrees(theta.degrees)
     }

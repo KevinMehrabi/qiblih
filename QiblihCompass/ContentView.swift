@@ -64,13 +64,13 @@ struct ContentView: View {
         VStack(spacing: 12) {
             HStack(spacing: 12) {
                 ReadingTile(
-                    title: "True Heading",
+                    title: "Your Heading",
                     value: formattedDegrees(locationHeadingManager.currentHeading),
                     footnote: "from true north"
                 )
 
                 ReadingTile(
-                    title: "Magnetic Heading",
+                    title: "Your Heading",
                     value: formattedDegrees(locationHeadingManager.currentMagneticHeading),
                     footnote: "from magnetic north"
                 )
@@ -78,13 +78,13 @@ struct ContentView: View {
 
             HStack(spacing: 12) {
                 ReadingTile(
-                    title: "True Bearing",
+                    title: "Qiblih Bearing",
                     value: formattedDegrees(locationHeadingManager.targetBearing),
                     footnote: "\(locationHeadingManager.bearingMode.title) from true north"
                 )
 
                 ReadingTile(
-                    title: "Magnetic Bearing",
+                    title: "Qiblih Bearing",
                     value: formattedDegrees(locationHeadingManager.targetMagneticBearing),
                     footnote: "\(locationHeadingManager.bearingMode.title) from magnetic north"
                 )

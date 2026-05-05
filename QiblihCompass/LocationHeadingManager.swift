@@ -181,7 +181,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         isHeadingUnavailable = !CLLocationManager.headingAvailable()
         if isHeadingUnavailable {
             statusText = "Compass Unavailable"
-            detailText = "This device does not provide heading updates."
+            detailText = "This device cannot provide your heading."
         } else {
             locationManager.startUpdatingHeading()
         }
@@ -206,7 +206,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
             currentHeading = nil
             targetMagneticBearing = nil
             isUsingApproximateHeading = false
-            detailText = "Waiting for true heading."
+            detailText = "Waiting for your true heading."
             updateDirectionIfPossible()
             return
         }
@@ -232,9 +232,9 @@ final class LocationHeadingManager: NSObject, ObservableObject {
             if hasLocationAuthorization {
                 statusText = "Finding the Qiblih"
                 if isHeadingUnavailable {
-                    detailText = "This device does not provide heading updates."
+                    detailText = "This device cannot provide your heading."
                 } else if currentHeading == nil, targetBearing != nil {
-                    detailText = "Waiting for true heading."
+                    detailText = "Waiting for your true heading."
                 } else {
                     detailText = "Waiting for location and compass readings."
                 }
@@ -254,7 +254,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
             statusText = "Turn right"
         }
 
-        detailText = "Using true heading."
+        detailText = "Using your true heading."
     }
 
     private var hasLocationAuthorization: Bool {
@@ -304,7 +304,7 @@ extension LocationHeadingManager: CLLocationManagerDelegate {
         case .headingFailure:
             isHeadingUnavailable = true
             statusText = "Compass Unavailable"
-            detailText = "This device cannot provide a reliable heading right now."
+            detailText = "This device cannot provide your heading reliably right now."
         default:
             detailText = "Location update failed. Try again in a moment."
         }

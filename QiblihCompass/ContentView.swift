@@ -8,7 +8,7 @@ struct ContentView: View {
         ZStack {
             AppBackground()
 
-            VStack(spacing: 28) {
+            VStack(spacing: 18) {
                 header
 
                 BearingModeSelector(
@@ -16,11 +16,16 @@ struct ContentView: View {
                     onSelect: { locationHeadingManager.setBearingMode($0) }
                 )
 
+                Spacer(minLength: 0)
+
                 CompassDial(
                     qiblihAngle: locationHeadingManager.relativeAngle,
                     hasDirection: locationHeadingManager.currentHeading != nil && locationHeadingManager.targetBearing != nil
                 )
-                .frame(maxWidth: 360)
+                .frame(maxWidth: 430)
+                .layoutPriority(1)
+
+                Spacer(minLength: 0)
 
                 VStack(spacing: 8) {
                     Text(locationHeadingManager.statusText)
@@ -36,11 +41,13 @@ struct ContentView: View {
                         .minimumScaleFactor(0.82)
                 }
                 .padding(.horizontal)
-
-                readings
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 36)
+            .padding(.horizontal, 22)
+            .padding(.top, 34)
+            .padding(.bottom, 12)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            readings
         }
         .onAppear {
             locationHeadingManager.requestPermissionAndStartUpdates()
@@ -61,38 +68,25 @@ struct ContentView: View {
     }
 
     private var readings: some View {
-        VStack(spacing: 16) {
-            ReadingSection(title: "Your Heading") {
-                HStack(spacing: 12) {
-                    ReadingTile(
-                        title: "True",
-                        value: formattedDegrees(locationHeadingManager.currentHeading),
-                        footnote: "from true north"
-                    )
-
-                    ReadingTile(
-                        title: "Magnetic",
-                        value: formattedDegrees(locationHeadingManager.currentMagneticHeading),
-                        footnote: "from magnetic north"
-                    )
-                }
-            }
-
-            ReadingSection(title: "Qiblih Bearing") {
-                HStack(spacing: 12) {
-                    ReadingTile(
-                        title: "True",
-                        value: formattedDegrees(locationHeadingManager.targetBearing),
-                        footnote: "from true north"
-                    )
-
-                    ReadingTile(
-                        title: "Magnetic",
-                        value: formattedDegrees(locationHeadingManager.targetMagneticBearing),
-                        footnote: "from magnetic north"
-                    )
-                }
-            }
+        CompactReadingsPanel(
+            headingTrue: formattedDegrees(locationHeadingManager.currentHeading),
+            headingMagnetic: formattedDegrees(locationHeadingManager.currentMagneticHeading),
+            bearingTrue: formattedDegrees(locationHeadingManager.targetBearing),
+            bearingMagnetic: formattedDegrees(locationHeadingManager.targetMagneticBearing)
+        )
+        .padding(.horizontal, 18)
+        .padding(.top, 8)
+        .padding(.bottom, 10)
+        .background {
+            LinearGradient(
+                colors: [
+                    Color.backgroundBottom.opacity(0),
+                    Color.backgroundBottom.opacity(0.96)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea(edges: .bottom)
         }
     }
 
@@ -138,25 +132,25 @@ private struct BearingModeSelector: View {
                             .font(.caption2.weight(.medium))
                             .opacity(0.78)
                     }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 9)
-                        .foregroundStyle(selection == mode ? Color.dialFill : Color.primaryText)
-                        .background {
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(selection == mode ? Color.primaryText : Color.white.opacity(0.64))
-                        }
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .stroke(
-                                    selection == mode ? Color.primaryText.opacity(0.28) : Color.primaryText.opacity(0.1),
-                                    lineWidth: 1
-                                )
-                        }
-                        .shadow(
-                            color: selection == mode ? .black.opacity(0.18) : .clear,
-                            radius: 1,
-                            y: selection == mode ? 1 : 0
-                        )
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 9)
+                    .foregroundStyle(selection == mode ? Color.dialFill : Color.primaryText)
+                    .background {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(selection == mode ? Color.primaryText : Color.white.opacity(0.64))
+                    }
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(
+                                selection == mode ? Color.primaryText.opacity(0.28) : Color.primaryText.opacity(0.1),
+                                lineWidth: 1
+                            )
+                    }
+                    .shadow(
+                        color: selection == mode ? .black.opacity(0.18) : .clear,
+                        radius: 1,
+                        y: selection == mode ? 1 : 0
+                    )
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(selection == mode ? .isSelected : [])
@@ -312,60 +306,84 @@ private struct TickRing: Shape {
     }
 }
 
-private struct ReadingSection<Content: View>: View {
-    let title: String
-    let content: Content
-
-    init(title: String, @ViewBuilder content: () -> Content) {
-        self.title = title
-        self.content = content()
-    }
+private struct CompactReadingsPanel: View {
+    let headingTrue: String
+    let headingMagnetic: String
+    let bearingTrue: String
+    let bearingMagnetic: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Color.secondaryText)
-                .padding(.horizontal, 4)
+        HStack(alignment: .top, spacing: 12) {
+            CompactReadingGroup(
+                title: "Your Heading",
+                trueValue: headingTrue,
+                magneticValue: headingMagnetic
+            )
 
-            content
+            Rectangle()
+                .fill(Color.primaryText.opacity(0.08))
+                .frame(width: 1)
+
+            CompactReadingGroup(
+                title: "Qiblih Bearing",
+                trueValue: bearingTrue,
+                magneticValue: bearingMagnetic
+            )
         }
-    }
-}
-
-private struct ReadingTile: View {
-    let title: String
-    let value: String
-    let footnote: String
-
-    var body: some View {
-        VStack(spacing: 5) {
-            Text(title)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(Color.secondaryText)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-
-            Text(value)
-                .font(.title3.monospacedDigit().weight(.semibold))
-                .foregroundStyle(Color.primaryText)
-
-            Text(footnote)
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(Color.secondaryText.opacity(0.8))
-                .lineLimit(1)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
-        .padding(.horizontal, 10)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 14)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.white.opacity(0.72))
+                .fill(Color.dialFill.opacity(0.88))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(Color.primaryText.opacity(0.08), lineWidth: 1)
         )
+    }
+}
+
+private struct CompactReadingGroup: View {
+    let title: String
+    let trueValue: String
+    let magneticValue: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color.secondaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                CompactReadingValue(label: "True", value: trueValue)
+                CompactReadingValue(label: "Magnetic", value: magneticValue)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct CompactReadingValue: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(Color.secondaryText.opacity(0.8))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+
+            Text(value)
+                .font(.callout.monospacedDigit().weight(.semibold))
+                .foregroundStyle(Color.primaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

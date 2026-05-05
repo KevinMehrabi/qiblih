@@ -74,6 +74,7 @@ struct ContentView: View {
             bearingTrue: formattedDegrees(locationHeadingManager.targetBearing),
             bearingMagnetic: formattedDegrees(locationHeadingManager.targetMagneticBearing)
         )
+        .fixedSize(horizontal: false, vertical: true)
         .padding(.horizontal, 18)
         .padding(.top, 8)
         .padding(.bottom, 10)
@@ -322,7 +323,7 @@ private struct CompactReadingsPanel: View {
 
             Rectangle()
                 .fill(Color.primaryText.opacity(0.08))
-                .frame(width: 1)
+                .frame(width: 1, height: 52)
 
             CompactReadingGroup(
                 title: "Qiblih Bearing",
@@ -340,6 +341,7 @@ private struct CompactReadingsPanel: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(Color.primaryText.opacity(0.08), lineWidth: 1)
         )
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 

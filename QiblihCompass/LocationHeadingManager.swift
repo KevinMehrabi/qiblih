@@ -18,6 +18,15 @@ enum BearingMode: String, CaseIterable, Identifiable {
             "Azimuth"
         }
     }
+
+    var subtitle: String {
+        switch self {
+        case .mercator:
+            "Traditional"
+        case .azimuth:
+            "Scientific"
+        }
+    }
 }
 
 final class LocationHeadingManager: NSObject, ObservableObject {

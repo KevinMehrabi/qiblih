@@ -130,10 +130,16 @@ private struct BearingModeSelector: View {
                 Button {
                     onSelect(mode)
                 } label: {
-                    Text(mode.title)
-                        .font(.subheadline.weight(.semibold))
+                    VStack(spacing: 3) {
+                        Text(mode.title)
+                            .font(.subheadline.weight(.semibold))
+
+                        Text(mode.subtitle)
+                            .font(.caption2.weight(.medium))
+                            .opacity(0.78)
+                    }
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 11)
+                        .padding(.vertical, 9)
                         .foregroundStyle(selection == mode ? Color.dialFill : Color.primaryText)
                         .background {
                             RoundedRectangle(cornerRadius: 8, style: .continuous)

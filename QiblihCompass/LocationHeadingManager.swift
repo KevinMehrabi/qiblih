@@ -49,6 +49,8 @@ final class LocationHeadingManager: NSObject, ObservableObject {
     @Published private(set) var isHeadingUnavailable = !CLLocationManager.headingAvailable()
 
     private let locationManager = CLLocationManager()
+    private var isCheckingLocationServices = false
+    private var hasStartedUpdates = false
 
     override init() {
         authorizationStatus = locationManager.authorizationStatus
@@ -62,12 +64,6 @@ final class LocationHeadingManager: NSObject, ObservableObject {
     }
 
     func requestPermissionAndStartUpdates() {
-        guard CLLocationManager.locationServicesEnabled() else {
-            statusText = "Location Services Off"
-            detailText = "Turn on Location Services to calculate the direction to Bahjí."
-            return
-        }
-
         switch authorizationStatus {
         case .notDetermined:
             #if os(iOS)
@@ -77,10 +73,10 @@ final class LocationHeadingManager: NSObject, ObservableObject {
             #endif
         #if os(iOS)
         case .authorizedWhenInUse, .authorizedAlways:
-            startUpdates()
+            checkLocationServicesAndStartUpdates()
         #else
         case .authorized, .authorizedAlways:
-            startUpdates()
+            checkLocationServicesAndStartUpdates()
         #endif
         case .denied, .restricted:
             statusText = "Location Permission Needed"
@@ -184,7 +180,38 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         return remainder >= 0 ? remainder : remainder + 360
     }
 
+    private func checkLocationServicesAndStartUpdates() {
+        guard !isCheckingLocationServices else {
+            return
+        }
+
+        isCheckingLocationServices = true
+        DispatchQueue.global(qos: .userInitiated).async {
+            let servicesEnabled = CLLocationManager.locationServicesEnabled()
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self else {
+                    return
+                }
+
+                self.isCheckingLocationServices = false
+                guard servicesEnabled else {
+                    self.statusText = "Location Services Off"
+                    self.detailText = "Turn on Location Services to calculate the direction to Bahjí."
+                    return
+                }
+
+                self.startUpdates()
+            }
+        }
+    }
+
     private func startUpdates() {
+        guard !hasStartedUpdates else {
+            return
+        }
+
+        hasStartedUpdates = true
         locationManager.startUpdatingLocation()
 
         isHeadingUnavailable = !CLLocationManager.headingAvailable()

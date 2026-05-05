@@ -30,7 +30,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
     @Published private(set) var currentLocation: CLLocation?
     @Published private(set) var currentHeading: CLLocationDirection?
     @Published private(set) var currentMagneticHeading: CLLocationDirection?
-    @Published private(set) var bearingMode: BearingMode = .mercator
+    @Published private(set) var bearingMode: BearingMode = .azimuth
     @Published private(set) var targetBearing: CLLocationDirection?
     @Published private(set) var targetMagneticBearing: CLLocationDirection?
     @Published private(set) var relativeAngle: CLLocationDirection = 0

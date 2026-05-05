@@ -61,33 +61,37 @@ struct ContentView: View {
     }
 
     private var readings: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                ReadingTile(
-                    title: "Your Heading",
-                    value: formattedDegrees(locationHeadingManager.currentHeading),
-                    footnote: "from true north"
-                )
+        VStack(spacing: 16) {
+            ReadingSection(title: "Your Heading") {
+                HStack(spacing: 12) {
+                    ReadingTile(
+                        title: "True",
+                        value: formattedDegrees(locationHeadingManager.currentHeading),
+                        footnote: "from true north"
+                    )
 
-                ReadingTile(
-                    title: "Your Heading",
-                    value: formattedDegrees(locationHeadingManager.currentMagneticHeading),
-                    footnote: "from magnetic north"
-                )
+                    ReadingTile(
+                        title: "Magnetic",
+                        value: formattedDegrees(locationHeadingManager.currentMagneticHeading),
+                        footnote: "from magnetic north"
+                    )
+                }
             }
 
-            HStack(spacing: 12) {
-                ReadingTile(
-                    title: "Qiblih Bearing",
-                    value: formattedDegrees(locationHeadingManager.targetBearing),
-                    footnote: "\(locationHeadingManager.bearingMode.title) from true north"
-                )
+            ReadingSection(title: "Qiblih Bearing") {
+                HStack(spacing: 12) {
+                    ReadingTile(
+                        title: "True",
+                        value: formattedDegrees(locationHeadingManager.targetBearing),
+                        footnote: "\(locationHeadingManager.bearingMode.title) from true north"
+                    )
 
-                ReadingTile(
-                    title: "Qiblih Bearing",
-                    value: formattedDegrees(locationHeadingManager.targetMagneticBearing),
-                    footnote: "\(locationHeadingManager.bearingMode.title) from magnetic north"
-                )
+                    ReadingTile(
+                        title: "Magnetic",
+                        value: formattedDegrees(locationHeadingManager.targetMagneticBearing),
+                        footnote: "\(locationHeadingManager.bearingMode.title) from magnetic north"
+                    )
+                }
             }
         }
     }
@@ -299,6 +303,27 @@ private struct TickRing: Shape {
         }
 
         return path
+    }
+}
+
+private struct ReadingSection<Content: View>: View {
+    let title: String
+    let content: Content
+
+    init(title: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color.secondaryText)
+                .padding(.horizontal, 4)
+
+            content
+        }
     }
 }
 

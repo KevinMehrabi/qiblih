@@ -22,8 +22,6 @@ struct ContentView: View {
                 )
                 .frame(maxWidth: 360)
 
-                readings
-
                 VStack(spacing: 8) {
                     Text(locationHeadingManager.statusText)
                         .font(.title2.weight(.semibold))
@@ -38,6 +36,8 @@ struct ContentView: View {
                         .minimumScaleFactor(0.82)
                 }
                 .padding(.horizontal)
+
+                readings
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 36)

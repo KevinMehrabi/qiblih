@@ -83,13 +83,13 @@ struct ContentView: View {
                     ReadingTile(
                         title: "True",
                         value: formattedDegrees(locationHeadingManager.targetBearing),
-                        footnote: "\(locationHeadingManager.bearingMode.title) from true north"
+                        footnote: "from true north"
                     )
 
                     ReadingTile(
                         title: "Magnetic",
                         value: formattedDegrees(locationHeadingManager.targetMagneticBearing),
-                        footnote: "\(locationHeadingManager.bearingMode.title) from magnetic north"
+                        footnote: "from magnetic north"
                     )
                 }
             }

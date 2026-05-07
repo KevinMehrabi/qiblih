@@ -33,12 +33,14 @@ struct ContentView: View {
                         .foregroundStyle(statusColor)
                         .multilineTextAlignment(.center)
 
-                    Text(locationHeadingManager.detailText)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(3)
-                        .minimumScaleFactor(0.82)
+                    if !locationHeadingManager.detailText.isEmpty {
+                        Text(locationHeadingManager.detailText)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(3)
+                            .minimumScaleFactor(0.82)
+                    }
                 }
                 .padding(.horizontal)
             }

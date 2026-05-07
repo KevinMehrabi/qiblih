@@ -290,7 +290,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
             statusText = "Turn right"
         }
 
-        detailText = "Using your true heading."
+        detailText = ""
     }
 
     private var hasLocationAuthorization: Bool {

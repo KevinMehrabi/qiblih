@@ -25,7 +25,7 @@ struct ContentView: View {
                 .frame(maxWidth: 430)
                 .layoutPriority(1)
 
-                Spacer(minLength: 0)
+                Spacer(minLength: 22)
 
                 VStack(spacing: 8) {
                     Text(locationHeadingManager.statusText)
@@ -43,10 +43,12 @@ struct ContentView: View {
                     }
                 }
                 .padding(.horizontal)
+
+                Spacer(minLength: 42)
             }
             .padding(.horizontal, 22)
             .padding(.top, 34)
-            .padding(.bottom, 12)
+            .padding(.bottom, 78)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             readings

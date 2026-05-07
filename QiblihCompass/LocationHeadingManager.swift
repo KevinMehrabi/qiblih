@@ -282,7 +282,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         let signedAngle = Self.signedTurnAngle(from: turnAngle)
         relativeAngle = turnAngle
 
-        if abs(signedAngle) <= 3 {
+        if abs(signedAngle) < 1 {
             statusText = "Facing the Qiblih"
         } else if signedAngle < 0 {
             statusText = "Turn left"

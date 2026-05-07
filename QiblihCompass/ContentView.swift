@@ -23,6 +23,7 @@ struct ContentView: View {
                     hasDirection: locationHeadingManager.currentHeading != nil && locationHeadingManager.targetBearing != nil
                 )
                 .frame(maxWidth: 430)
+                .offset(y: -52)
                 .layoutPriority(1)
 
                 Spacer(minLength: 0)

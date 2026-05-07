@@ -206,33 +206,22 @@ private struct QiblihDirectionMarker: View {
             let color = self.angle == nil ? Color.secondaryText.opacity(0.34) : Color.qiblihGold
             let innerRadius = side * 0.435
             let outerRadius = side * 0.49
-            let labelRadius = side * 0.505
 
-            ZStack {
-                Path { path in
-                    path.move(
-                        to: CGPoint(
-                            x: center.x + cos(radians) * innerRadius,
-                            y: center.y + sin(radians) * innerRadius
-                        )
+            Path { path in
+                path.move(
+                    to: CGPoint(
+                        x: center.x + cos(radians) * innerRadius,
+                        y: center.y + sin(radians) * innerRadius
                     )
-                    path.addLine(
-                        to: CGPoint(
-                            x: center.x + cos(radians) * outerRadius,
-                            y: center.y + sin(radians) * outerRadius
-                        )
+                )
+                path.addLine(
+                    to: CGPoint(
+                        x: center.x + cos(radians) * outerRadius,
+                        y: center.y + sin(radians) * outerRadius
                     )
-                }
-                .stroke(color, style: StrokeStyle(lineWidth: max(side * 0.018, 6), lineCap: .round))
-
-                Text("Q")
-                    .font(.system(size: side * 0.035, weight: .bold, design: .rounded))
-                    .foregroundStyle(color)
-                    .position(
-                        x: center.x + cos(radians) * labelRadius,
-                        y: center.y + sin(radians) * labelRadius
-                    )
+                )
             }
+            .stroke(color, style: StrokeStyle(lineWidth: max(side * 0.018, 6), lineCap: .round))
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
     }

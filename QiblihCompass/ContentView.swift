@@ -25,36 +25,41 @@ struct ContentView: View {
                 .frame(maxWidth: 430)
                 .layoutPriority(1)
 
-                Spacer(minLength: 22)
-
-                VStack(spacing: 8) {
-                    Text(locationHeadingManager.statusText)
-                        .font(.title2.weight(.semibold))
-                        .foregroundStyle(statusColor)
-                        .multilineTextAlignment(.center)
-
-                    if !locationHeadingManager.detailText.isEmpty {
-                        Text(locationHeadingManager.detailText)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .lineLimit(3)
-                            .minimumScaleFactor(0.82)
-                    }
-                }
-                .padding(.horizontal)
-
-                Spacer(minLength: 42)
+                Spacer(minLength: 0)
             }
             .padding(.horizontal, 22)
             .padding(.top, 34)
-            .padding(.bottom, 78)
+            .padding(.bottom, 12)
+
+            statusBlock
+                .padding(.horizontal, 22)
+                .padding(.bottom, 128)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .allowsHitTesting(false)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             readings
         }
         .onAppear {
             locationHeadingManager.requestPermissionAndStartUpdates()
+        }
+    }
+
+    private var statusBlock: some View {
+        VStack(spacing: 8) {
+            Text(locationHeadingManager.statusText)
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(statusColor)
+                .multilineTextAlignment(.center)
+
+            if !locationHeadingManager.detailText.isEmpty {
+                Text(locationHeadingManager.detailText)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.82)
+            }
         }
     }
 

@@ -55,15 +55,11 @@ struct ContentView: View {
     }
 
     private var header: some View {
-        VStack(spacing: 7) {
+        VStack {
             Text("Qiblih Compass")
                 .font(.largeTitle.weight(.semibold))
                 .foregroundStyle(Color.primaryText)
                 .multilineTextAlignment(.center)
-
-            Text("Bahjí, near ‘Akká")
-                .font(.callout.weight(.medium))
-                .foregroundStyle(Color.secondaryText)
         }
     }
 

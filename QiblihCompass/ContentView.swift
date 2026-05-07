@@ -117,7 +117,7 @@ private struct BearingModeSelector: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            ForEach(BearingMode.allCases) { mode in
+            ForEach([BearingMode.azimuth, .mercator]) { mode in
                 Button {
                     onSelect(mode)
                 } label: {

@@ -33,7 +33,7 @@ struct ContentView: View {
 
             statusBlock
                 .padding(.horizontal, 22)
-                .padding(.bottom, 128)
+                .padding(.bottom, 42)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 .allowsHitTesting(false)
         }

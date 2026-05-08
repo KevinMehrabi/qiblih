@@ -50,11 +50,14 @@ final class LocationHeadingManager: NSObject, ObservableObject {
     @Published private(set) var isUsingApproximateHeading = false
     @Published private(set) var isHeadingUnavailable = !CLLocationManager.headingAvailable()
 
-    private static let maximumTrustedHeadingAccuracy: CLLocationDirection = 20
+    private static let calibratedHeadingAccuracy: CLLocationDirection = 35
+    private static let poorHeadingAccuracy: CLLocationDirection = 65
+    private static let poorHeadingSamplesBeforeRecalibration = 5
 
     private let locationManager = CLLocationManager()
     private var isCheckingLocationServices = false
     private var hasStartedUpdates = false
+    private var poorHeadingSampleCount = 0
 
     override init() {
         authorizationStatus = locationManager.authorizationStatus
@@ -243,7 +246,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
 
     private func updateHeading(from heading: CLHeading) {
         headingAccuracy = heading.headingAccuracy >= 0 ? heading.headingAccuracy : nil
-        isHeadingCalibrated = headingAccuracy.map { $0 <= Self.maximumTrustedHeadingAccuracy } ?? false
+        updateCalibrationState()
 
         currentMagneticHeading = heading.magneticHeading >= 0
             ? Self.normalizeDegrees(heading.magneticHeading)
@@ -253,6 +256,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
             currentHeading = nil
             targetMagneticBearing = nil
             isHeadingCalibrated = false
+            poorHeadingSampleCount = 0
             isUsingApproximateHeading = false
             detailText = "Waiting for your true heading."
             updateDirectionIfPossible()
@@ -263,6 +267,28 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         isUsingApproximateHeading = false
         updateMagneticBearingIfPossible()
         updateDirectionIfPossible()
+    }
+
+    private func updateCalibrationState() {
+        guard let headingAccuracy else {
+            poorHeadingSampleCount += 1
+            if !isHeadingCalibrated || poorHeadingSampleCount >= Self.poorHeadingSamplesBeforeRecalibration {
+                isHeadingCalibrated = false
+            }
+            return
+        }
+
+        if headingAccuracy <= Self.calibratedHeadingAccuracy {
+            isHeadingCalibrated = true
+            poorHeadingSampleCount = 0
+        } else if headingAccuracy > Self.poorHeadingAccuracy {
+            poorHeadingSampleCount += 1
+            if !isHeadingCalibrated || poorHeadingSampleCount >= Self.poorHeadingSamplesBeforeRecalibration {
+                isHeadingCalibrated = false
+            }
+        } else if isHeadingCalibrated {
+            poorHeadingSampleCount = 0
+        }
     }
 
     private func updateMagneticBearingIfPossible() {

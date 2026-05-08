@@ -45,8 +45,12 @@ final class LocationHeadingManager: NSObject, ObservableObject {
     @Published private(set) var relativeAngle: CLLocationDirection = 0
     @Published private(set) var statusText = "Finding the Qiblih"
     @Published private(set) var detailText = "Allow location access and hold the phone flat."
+    @Published private(set) var headingAccuracy: CLLocationDirection?
+    @Published private(set) var isHeadingCalibrated = false
     @Published private(set) var isUsingApproximateHeading = false
     @Published private(set) var isHeadingUnavailable = !CLLocationManager.headingAvailable()
+
+    private static let maximumTrustedHeadingAccuracy: CLLocationDirection = 20
 
     private let locationManager = CLLocationManager()
     private var isCheckingLocationServices = false
@@ -94,6 +98,10 @@ final class LocationHeadingManager: NSObject, ObservableObject {
 
         bearingMode = mode
         updateBearingIfPossible()
+    }
+
+    var hasReliableDirection: Bool {
+        currentHeading != nil && targetBearing != nil && isHeadingCalibrated
     }
 
     static func qiblihBearing(from origin: CLLocationCoordinate2D, mode: BearingMode) -> CLLocationDirection {
@@ -234,6 +242,9 @@ final class LocationHeadingManager: NSObject, ObservableObject {
     }
 
     private func updateHeading(from heading: CLHeading) {
+        headingAccuracy = heading.headingAccuracy >= 0 ? heading.headingAccuracy : nil
+        isHeadingCalibrated = headingAccuracy.map { $0 <= Self.maximumTrustedHeadingAccuracy } ?? false
+
         currentMagneticHeading = heading.magneticHeading >= 0
             ? Self.normalizeDegrees(heading.magneticHeading)
             : nil
@@ -241,6 +252,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         guard heading.trueHeading >= 0 else {
             currentHeading = nil
             targetMagneticBearing = nil
+            isHeadingCalibrated = false
             isUsingApproximateHeading = false
             detailText = "Waiting for your true heading."
             updateDirectionIfPossible()
@@ -282,6 +294,12 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         let signedAngle = Self.signedTurnAngle(from: turnAngle)
         relativeAngle = turnAngle
 
+        guard isHeadingCalibrated else {
+            statusText = "Calibrate Compass"
+            detailText = calibrationDetailText
+            return
+        }
+
         if abs(signedAngle) < 1 {
             statusText = "Facing the Qiblih"
         } else if signedAngle < 0 {
@@ -291,6 +309,15 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         }
 
         detailText = ""
+    }
+
+    private var calibrationDetailText: String {
+        guard let headingAccuracy else {
+            return "Move iPhone in a figure eight away from metal or magnets."
+        }
+
+        let roundedAccuracy = Int(headingAccuracy.rounded())
+        return "Move iPhone in a figure eight away from metal or magnets. Accuracy ±\(roundedAccuracy)°."
     }
 
     private var hasLocationAuthorization: Bool {

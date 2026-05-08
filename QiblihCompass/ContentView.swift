@@ -20,7 +20,7 @@ struct ContentView: View {
 
                 CompassDial(
                     qiblihAngle: locationHeadingManager.relativeAngle,
-                    hasDirection: locationHeadingManager.currentHeading != nil && locationHeadingManager.targetBearing != nil
+                    hasDirection: locationHeadingManager.hasReliableDirection
                 )
                 .frame(maxWidth: 430)
                 .offset(y: -52)
@@ -206,31 +206,31 @@ private struct QiblihDirectionMarker: View {
     let angle: CLLocationDirection?
 
     var body: some View {
-        GeometryReader { proxy in
-            let side = min(proxy.size.width, proxy.size.height)
-            let center = CGPoint(x: proxy.size.width / 2, y: proxy.size.height / 2)
-            let angle = angle ?? 0
-            let radians = CGFloat(angle - 90) * .pi / 180
-            let color = self.angle == nil ? Color.secondaryText.opacity(0.34) : Color.qiblihGold
-            let innerRadius = side * 0.435
-            let outerRadius = side * 0.49
+        if let angle {
+            GeometryReader { proxy in
+                let side = min(proxy.size.width, proxy.size.height)
+                let center = CGPoint(x: proxy.size.width / 2, y: proxy.size.height / 2)
+                let radians = CGFloat(angle - 90) * .pi / 180
+                let innerRadius = side * 0.435
+                let outerRadius = side * 0.49
 
-            Path { path in
-                path.move(
-                    to: CGPoint(
-                        x: center.x + cos(radians) * innerRadius,
-                        y: center.y + sin(radians) * innerRadius
+                Path { path in
+                    path.move(
+                        to: CGPoint(
+                            x: center.x + cos(radians) * innerRadius,
+                            y: center.y + sin(radians) * innerRadius
+                        )
                     )
-                )
-                path.addLine(
-                    to: CGPoint(
-                        x: center.x + cos(radians) * outerRadius,
-                        y: center.y + sin(radians) * outerRadius
+                    path.addLine(
+                        to: CGPoint(
+                            x: center.x + cos(radians) * outerRadius,
+                            y: center.y + sin(radians) * outerRadius
+                        )
                     )
-                )
+                }
+                .stroke(Color.qiblihGold, style: StrokeStyle(lineWidth: max(side * 0.018, 6), lineCap: .round))
+                .frame(width: proxy.size.width, height: proxy.size.height)
             }
-            .stroke(color, style: StrokeStyle(lineWidth: max(side * 0.018, 6), lineCap: .round))
-            .frame(width: proxy.size.width, height: proxy.size.height)
         }
     }
 }

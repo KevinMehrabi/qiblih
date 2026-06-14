@@ -66,6 +66,15 @@ final class LocationHeadingManager: NSObject, ObservableObject {
     private var smoothedMagneticHeading: CLLocationDirection?
     private var pendingHeadingJump: PendingHeadingJump?
 
+    #if targetEnvironment(simulator)
+    private static let simulatorCoordinate = CLLocationCoordinate2D(
+        latitude: 40.7128,
+        longitude: -74.0060
+    )
+    private static let simulatorHeading: CLLocationDirection = 0
+    private static let simulatorHeadingAccuracy: CLLocationDirection = 5
+    #endif
+
     private struct PendingHeadingJump {
         var trueHeading: CLLocationDirection
         var magneticHeading: CLLocationDirection?
@@ -258,6 +267,9 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         hasStartedUpdates = true
         locationManager.startUpdatingLocation()
 
+        #if targetEnvironment(simulator)
+        useSimulatorHeadingPreview()
+        #else
         isHeadingUnavailable = !CLLocationManager.headingAvailable()
         if isHeadingUnavailable {
             statusText = "Compass Unavailable"
@@ -265,6 +277,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         } else {
             locationManager.startUpdatingHeading()
         }
+        #endif
     }
 
     private func updateBearingIfPossible() {
@@ -312,6 +325,32 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         updateMagneticBearingIfPossible()
         updateDirectionIfPossible()
     }
+
+    #if targetEnvironment(simulator)
+    private func useSimulatorHeadingPreview() {
+        isHeadingUnavailable = false
+        headingAccuracy = Self.simulatorHeadingAccuracy
+        isHeadingCalibrated = true
+        poorHeadingSampleCount = 0
+        pendingHeadingJump = nil
+
+        if currentLocation == nil {
+            currentLocation = CLLocation(
+                latitude: Self.simulatorCoordinate.latitude,
+                longitude: Self.simulatorCoordinate.longitude
+            )
+            updateBearingIfPossible()
+        }
+
+        let heading = Self.normalizeDegrees(Self.simulatorHeading)
+        currentHeading = heading
+        currentMagneticHeading = heading
+        smoothedTrueHeading = heading
+        smoothedMagneticHeading = heading
+        updateMagneticBearingIfPossible()
+        updateDirectionIfPossible()
+    }
+    #endif
 
     private func stabilizedHeading(
         trueHeading: CLLocationDirection,

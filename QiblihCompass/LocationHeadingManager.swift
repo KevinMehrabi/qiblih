@@ -53,11 +53,31 @@ final class LocationHeadingManager: NSObject, ObservableObject {
     private static let calibratedHeadingAccuracy: CLLocationDirection = 35
     private static let poorHeadingAccuracy: CLLocationDirection = 65
     private static let poorHeadingSamplesBeforeRecalibration = 5
+    private static let headingJumpThreshold: CLLocationDirection = 55
+    private static let headingJumpConfirmationThreshold: CLLocationDirection = 18
+    private static let headingJumpConfirmationSamples = 2
+    private static let headingJumpResetInterval: TimeInterval = 1.5
 
     private let locationManager = CLLocationManager()
     private var isCheckingLocationServices = false
     private var hasStartedUpdates = false
     private var poorHeadingSampleCount = 0
+    private var smoothedTrueHeading: CLLocationDirection?
+    private var smoothedMagneticHeading: CLLocationDirection?
+    private var pendingHeadingJump: PendingHeadingJump?
+
+    private struct PendingHeadingJump {
+        var trueHeading: CLLocationDirection
+        var magneticHeading: CLLocationDirection?
+        var sampleCount: Int
+        var timestamp: Date
+    }
+
+    private struct StabilizedHeading {
+        let trueHeading: CLLocationDirection
+        let magneticHeading: CLLocationDirection?
+        let isHeldEstimate: Bool
+    }
 
     override init() {
         authorizationStatus = locationManager.authorizationStatus
@@ -66,7 +86,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.distanceFilter = kCLDistanceFilterNone
-        locationManager.headingFilter = 1
+        locationManager.headingFilter = 2
         locationManager.headingOrientation = .portrait
     }
 
@@ -186,6 +206,19 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         relativeAngle > 180 ? relativeAngle - 360 : relativeAngle
     }
 
+    static func signedAngleDelta(from start: CLLocationDirection, to end: CLLocationDirection) -> CLLocationDirection {
+        signedTurnAngle(from: relativeAngle(from: start, to: end))
+    }
+
+    static func interpolatedHeading(
+        from start: CLLocationDirection,
+        to end: CLLocationDirection,
+        fraction: CLLocationDirection
+    ) -> CLLocationDirection {
+        let boundedFraction = min(max(fraction, 0), 1)
+        return normalizeDegrees(start + signedAngleDelta(from: start, to: end) * boundedFraction)
+    }
+
     static func normalizeDegrees(_ degrees: CLLocationDirection) -> CLLocationDirection {
         let remainder = degrees.truncatingRemainder(dividingBy: 360)
         return remainder >= 0 ? remainder : remainder + 360
@@ -248,25 +281,172 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         headingAccuracy = heading.headingAccuracy >= 0 ? heading.headingAccuracy : nil
         updateCalibrationState()
 
-        currentMagneticHeading = heading.magneticHeading >= 0
+        let measuredMagneticHeading = heading.magneticHeading >= 0
             ? Self.normalizeDegrees(heading.magneticHeading)
             : nil
 
         guard heading.trueHeading >= 0 else {
             currentHeading = nil
+            currentMagneticHeading = measuredMagneticHeading
             targetMagneticBearing = nil
             isHeadingCalibrated = false
             poorHeadingSampleCount = 0
             isUsingApproximateHeading = false
+            resetStabilizedHeading()
             detailText = "Waiting for your true heading."
             updateDirectionIfPossible()
             return
         }
 
-        currentHeading = Self.normalizeDegrees(heading.trueHeading)
-        isUsingApproximateHeading = false
+        let measuredTrueHeading = Self.normalizeDegrees(heading.trueHeading)
+        let stabilizedHeading = stabilizedHeading(
+            trueHeading: measuredTrueHeading,
+            magneticHeading: measuredMagneticHeading,
+            accuracy: headingAccuracy,
+            timestamp: heading.timestamp
+        )
+
+        currentHeading = stabilizedHeading.trueHeading
+        currentMagneticHeading = stabilizedHeading.magneticHeading
+        isUsingApproximateHeading = stabilizedHeading.isHeldEstimate
         updateMagneticBearingIfPossible()
         updateDirectionIfPossible()
+    }
+
+    private func stabilizedHeading(
+        trueHeading: CLLocationDirection,
+        magneticHeading: CLLocationDirection?,
+        accuracy: CLLocationDirection?,
+        timestamp: Date
+    ) -> StabilizedHeading {
+        guard let previousTrueHeading = smoothedTrueHeading else {
+            smoothedTrueHeading = trueHeading
+            smoothedMagneticHeading = magneticHeading
+            pendingHeadingJump = nil
+            return StabilizedHeading(
+                trueHeading: trueHeading,
+                magneticHeading: magneticHeading,
+                isHeldEstimate: false
+            )
+        }
+
+        if let accuracy, accuracy > Self.poorHeadingAccuracy {
+            return StabilizedHeading(
+                trueHeading: previousTrueHeading,
+                magneticHeading: smoothedMagneticHeading ?? magneticHeading,
+                isHeldEstimate: true
+            )
+        }
+
+        let delta = abs(Self.signedAngleDelta(from: previousTrueHeading, to: trueHeading))
+        let shouldHoldJump = shouldHoldPossibleHeadingJump(
+            trueHeading: trueHeading,
+            magneticHeading: magneticHeading,
+            delta: delta,
+            timestamp: timestamp
+        )
+
+        if shouldHoldJump {
+            return StabilizedHeading(
+                trueHeading: previousTrueHeading,
+                magneticHeading: smoothedMagneticHeading ?? magneticHeading,
+                isHeldEstimate: true
+            )
+        }
+
+        let acceptedConfirmedJump = (pendingHeadingJump?.sampleCount ?? 0) >= Self.headingJumpConfirmationSamples
+        pendingHeadingJump = nil
+
+        let smoothingFraction = Self.headingSmoothingFraction(
+            for: accuracy,
+            delta: delta,
+            acceptedConfirmedJump: acceptedConfirmedJump
+        )
+
+        let smoothedTrueHeading = Self.interpolatedHeading(
+            from: previousTrueHeading,
+            to: trueHeading,
+            fraction: smoothingFraction
+        )
+        self.smoothedTrueHeading = smoothedTrueHeading
+
+        if let magneticHeading {
+            let previousMagneticHeading = smoothedMagneticHeading ?? magneticHeading
+            smoothedMagneticHeading = Self.interpolatedHeading(
+                from: previousMagneticHeading,
+                to: magneticHeading,
+                fraction: smoothingFraction
+            )
+        } else {
+            smoothedMagneticHeading = nil
+        }
+
+        return StabilizedHeading(
+            trueHeading: smoothedTrueHeading,
+            magneticHeading: smoothedMagneticHeading,
+            isHeldEstimate: false
+        )
+    }
+
+    private func shouldHoldPossibleHeadingJump(
+        trueHeading: CLLocationDirection,
+        magneticHeading: CLLocationDirection?,
+        delta: CLLocationDirection,
+        timestamp: Date
+    ) -> Bool {
+        guard delta >= Self.headingJumpThreshold else {
+            pendingHeadingJump = nil
+            return false
+        }
+
+        if var pendingHeadingJump,
+           timestamp.timeIntervalSince(pendingHeadingJump.timestamp) <= Self.headingJumpResetInterval,
+           abs(Self.signedAngleDelta(from: pendingHeadingJump.trueHeading, to: trueHeading)) <= Self.headingJumpConfirmationThreshold {
+            pendingHeadingJump.trueHeading = trueHeading
+            pendingHeadingJump.magneticHeading = magneticHeading
+            pendingHeadingJump.sampleCount += 1
+            pendingHeadingJump.timestamp = timestamp
+            self.pendingHeadingJump = pendingHeadingJump
+            return pendingHeadingJump.sampleCount < Self.headingJumpConfirmationSamples
+        }
+
+        pendingHeadingJump = PendingHeadingJump(
+            trueHeading: trueHeading,
+            magneticHeading: magneticHeading,
+            sampleCount: 1,
+            timestamp: timestamp
+        )
+        return true
+    }
+
+    private static func headingSmoothingFraction(
+        for accuracy: CLLocationDirection?,
+        delta: CLLocationDirection,
+        acceptedConfirmedJump: Bool
+    ) -> CLLocationDirection {
+        if acceptedConfirmedJump {
+            return 0.45
+        }
+
+        guard let accuracy else {
+            return 0.16
+        }
+
+        if accuracy <= 15 {
+            return delta > 30 ? 0.34 : 0.28
+        }
+
+        if accuracy <= calibratedHeadingAccuracy {
+            return delta > 30 ? 0.26 : 0.2
+        }
+
+        return 0.12
+    }
+
+    private func resetStabilizedHeading() {
+        smoothedTrueHeading = nil
+        smoothedMagneticHeading = nil
+        pendingHeadingJump = nil
     }
 
     private func updateCalibrationState() {

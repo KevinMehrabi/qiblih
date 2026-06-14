@@ -281,6 +281,10 @@ final class LocationHeadingManager: NSObject, ObservableObject {
     }
 
     private func updateBearingIfPossible() {
+        #if targetEnvironment(simulator)
+        ensureSimulatorLocationPreview()
+        #endif
+
         guard let coordinate = currentLocation?.coordinate else {
             return
         }
@@ -334,13 +338,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         poorHeadingSampleCount = 0
         pendingHeadingJump = nil
 
-        if currentLocation == nil {
-            currentLocation = CLLocation(
-                latitude: Self.simulatorCoordinate.latitude,
-                longitude: Self.simulatorCoordinate.longitude
-            )
-            updateBearingIfPossible()
-        }
+        ensureSimulatorLocationPreview()
 
         let heading = Self.normalizeDegrees(Self.simulatorHeading)
         currentHeading = heading
@@ -349,6 +347,17 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         smoothedMagneticHeading = heading
         updateMagneticBearingIfPossible()
         updateDirectionIfPossible()
+    }
+
+    private func ensureSimulatorLocationPreview() {
+        guard currentLocation == nil else {
+            return
+        }
+
+        currentLocation = CLLocation(
+            latitude: Self.simulatorCoordinate.latitude,
+            longitude: Self.simulatorCoordinate.longitude
+        )
     }
     #endif
 
@@ -528,6 +537,8 @@ final class LocationHeadingManager: NSObject, ObservableObject {
                     detailText = "This device cannot provide your heading."
                 } else if currentHeading == nil, targetBearing != nil {
                     detailText = "Waiting for your true heading."
+                } else if currentHeading != nil, targetBearing == nil {
+                    detailText = "Waiting for your location."
                 } else {
                     detailText = "Waiting for location and compass readings."
                 }

@@ -1,5 +1,6 @@
 import Combine
 import CoreLocation
+import CoreMotion
 import Foundation
 
 enum BearingMode: String, CaseIterable, Identifiable {
@@ -54,6 +55,13 @@ final class LocationHeadingManager: NSObject, ObservableObject {
     private static let calibratedHeadingAccuracy: CLLocationDirection = 35
     private static let poorHeadingAccuracy: CLLocationDirection = 65
     private static let poorHeadingSamplesBeforeRecalibration = 5
+    private static let locationDistanceFilter: CLLocationDistance = 500
+    private static let minimumBearingAnchorRefreshDistance: CLLocationDistance = 250
+    private static let maximumBearingAnchorRefreshDistance: CLLocationDistance = 5_000
+    private static let bearingAnchorRefreshDistanceRatio: CLLocationDistance = 0.005
+    private static let bearingAnchorAccuracyImprovement: CLLocationAccuracy = 500
+    private static let minimumBearingAnchorRefreshAngle: CLLocationDirection = 0.75
+    private static let motionHeadingFallbackAccuracy: CLLocationDirection = 20
     private static let headingJumpThreshold: CLLocationDirection = 55
     private static let headingJumpConfirmationThreshold: CLLocationDirection = 18
     private static let headingJumpConfirmationSamples = 2
@@ -63,12 +71,15 @@ final class LocationHeadingManager: NSObject, ObservableObject {
     private static let lastKnownLocationMaxHorizontalAccuracy: CLLocationAccuracy = 10_000
 
     private let locationManager = CLLocationManager()
+    private let motionManager = CMMotionManager()
     private var isCheckingLocationServices = false
     private var hasStartedUpdates = false
     private var poorHeadingSampleCount = 0
     private var smoothedTrueHeading: CLLocationDirection?
     private var smoothedMagneticHeading: CLLocationDirection?
     private var pendingHeadingJump: PendingHeadingJump?
+    private var bearingAnchorLocation: CLLocation?
+    private var isMotionHeadingActive = false
 
     #if targetEnvironment(simulator)
     private static let simulatorCoordinate = CLLocationCoordinate2D(
@@ -97,10 +108,16 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         super.init()
 
         locationManager.delegate = self
-        locationManager.desiredAccuracy = kCLLocationAccuracyBest
-        locationManager.distanceFilter = kCLDistanceFilterNone
+        locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+        locationManager.distanceFilter = Self.locationDistanceFilter
         locationManager.headingFilter = 2
         locationManager.headingOrientation = .portrait
+    }
+
+    deinit {
+        motionManager.stopDeviceMotionUpdates()
+        locationManager.stopUpdatingHeading()
+        locationManager.stopUpdatingLocation()
     }
 
     func requestPermissionAndStartUpdates() {
@@ -133,7 +150,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         }
 
         bearingMode = mode
-        updateBearingIfPossible()
+        updateBearingIfPossible(force: true)
     }
 
     var hasReliableDirection: Bool {
@@ -275,27 +292,40 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         #if targetEnvironment(simulator)
         useSimulatorHeadingPreview()
         #else
-        isHeadingUnavailable = !CLLocationManager.headingAvailable()
-        if isHeadingUnavailable {
+        let coreLocationHeadingAvailable = CLLocationManager.headingAvailable()
+        let motionHeadingStarted = startMotionHeadingIfAvailable()
+        isHeadingUnavailable = !coreLocationHeadingAvailable && !motionHeadingStarted
+
+        if coreLocationHeadingAvailable {
+            locationManager.startUpdatingHeading()
+        } else if isHeadingUnavailable {
             statusText = "Compass Unavailable"
             detailText = "This device cannot provide your heading."
-        } else {
-            locationManager.startUpdatingHeading()
         }
         #endif
     }
 
-    private func updateBearingIfPossible() {
+    private func updateBearingIfPossible(force: Bool = false) {
         #if targetEnvironment(simulator)
         ensureSimulatorLocationPreview()
         #endif
 
-        guard let coordinate = currentLocation?.coordinate else {
+        guard let location = currentLocation else {
             return
         }
 
-        targetBearing = Self.qiblihBearing(from: coordinate, mode: bearingMode)
-        updateMagneticBearingIfPossible()
+        updateBearingAnchorIfNeeded(with: location, force: force)
+    }
+
+    private func updateBearingAnchorIfNeeded(with location: CLLocation, force: Bool) {
+        let shouldUpdateAnchor = force || bearingAnchorLocation == nil || shouldRefreshBearingAnchor(with: location)
+
+        if shouldUpdateAnchor {
+            bearingAnchorLocation = location
+            targetBearing = Self.qiblihBearing(from: location.coordinate, mode: bearingMode)
+            updateMagneticBearingIfPossible()
+        }
+
         updateDirectionIfPossible()
     }
 
@@ -306,9 +336,10 @@ final class LocationHeadingManager: NSObject, ObservableObject {
 
         let locationAge = abs(location.timestamp.timeIntervalSinceNow)
         if locationAge <= Self.freshLocationMaxAge {
+            let shouldReplaceLastKnownAnchor = isUsingLastKnownLocation
             isUsingLastKnownLocation = false
             currentLocation = location
-            updateBearingIfPossible()
+            updateBearingIfPossible(force: shouldReplaceLastKnownAnchor)
             return
         }
 
@@ -321,7 +352,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
 
         isUsingLastKnownLocation = true
         currentLocation = location
-        updateBearingIfPossible()
+        updateBearingIfPossible(force: bearingAnchorLocation == nil)
     }
 
     private func useLastKnownLocationIfAvailable() {
@@ -341,19 +372,29 @@ final class LocationHeadingManager: NSObject, ObservableObject {
             : nil
 
         guard heading.trueHeading >= 0 else {
-            currentHeading = nil
             currentMagneticHeading = measuredMagneticHeading
             targetMagneticBearing = nil
-            isHeadingCalibrated = false
-            poorHeadingSampleCount = 0
-            isUsingApproximateHeading = false
-            resetStabilizedHeading()
-            detailText = "Waiting for your true heading."
+            if !isMotionHeadingActive || currentHeading == nil {
+                currentHeading = nil
+                isHeadingCalibrated = false
+                poorHeadingSampleCount = 0
+                isUsingApproximateHeading = false
+                resetStabilizedHeading()
+                detailText = "Waiting for your true heading."
+            }
             updateDirectionIfPossible()
             return
         }
 
         let measuredTrueHeading = Self.normalizeDegrees(heading.trueHeading)
+
+        if isMotionHeadingActive, currentHeading != nil {
+            currentMagneticHeading = measuredMagneticHeading
+            updateMagneticBearingIfPossible()
+            updateDirectionIfPossible()
+            return
+        }
+
         let stabilizedHeading = stabilizedHeading(
             trueHeading: measuredTrueHeading,
             magneticHeading: measuredMagneticHeading,
@@ -368,6 +409,68 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         updateDirectionIfPossible()
     }
 
+    #if !targetEnvironment(simulator)
+    private func startMotionHeadingIfAvailable() -> Bool {
+        guard motionManager.isDeviceMotionAvailable else {
+            return false
+        }
+
+        let availableFrames = CMMotionManager.availableAttitudeReferenceFrames()
+        guard availableFrames.contains(.xTrueNorthZVertical) else {
+            return false
+        }
+
+        isMotionHeadingActive = true
+        motionManager.deviceMotionUpdateInterval = 1.0 / 15.0
+        motionManager.startDeviceMotionUpdates(using: .xTrueNorthZVertical, to: .main) { [weak self] motion, error in
+            guard let self else {
+                return
+            }
+
+            if error != nil {
+                self.isMotionHeadingActive = false
+                return
+            }
+
+            guard let motion else {
+                return
+            }
+
+            self.updateHeading(from: motion)
+        }
+
+        return true
+    }
+
+    private func updateHeading(from motion: CMDeviceMotion) {
+        guard motion.heading >= 0 else {
+            return
+        }
+
+        if headingAccuracy == nil {
+            headingAccuracy = Self.motionHeadingFallbackAccuracy
+        }
+
+        if let headingAccuracy, headingAccuracy <= Self.poorHeadingAccuracy {
+            isHeadingCalibrated = true
+            poorHeadingSampleCount = 0
+        }
+
+        let stabilizedHeading = stabilizedHeading(
+            trueHeading: Self.normalizeDegrees(motion.heading),
+            magneticHeading: currentMagneticHeading,
+            accuracy: headingAccuracy ?? Self.motionHeadingFallbackAccuracy,
+            timestamp: Date()
+        )
+
+        currentHeading = stabilizedHeading.trueHeading
+        currentMagneticHeading = stabilizedHeading.magneticHeading
+        isUsingApproximateHeading = stabilizedHeading.isHeldEstimate
+        updateMagneticBearingIfPossible()
+        updateDirectionIfPossible()
+    }
+    #endif
+
     #if targetEnvironment(simulator)
     private func useSimulatorHeadingPreview() {
         isHeadingUnavailable = false
@@ -377,6 +480,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         pendingHeadingJump = nil
 
         ensureSimulatorLocationPreview()
+        updateBearingIfPossible(force: true)
 
         let heading = Self.normalizeDegrees(Self.simulatorHeading)
         currentHeading = heading
@@ -533,6 +637,43 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         smoothedTrueHeading = nil
         smoothedMagneticHeading = nil
         pendingHeadingJump = nil
+    }
+
+    private func shouldRefreshBearingAnchor(with location: CLLocation) -> Bool {
+        guard let bearingAnchorLocation else {
+            return true
+        }
+
+        if location.horizontalAccuracy + Self.bearingAnchorAccuracyImprovement < bearingAnchorLocation.horizontalAccuracy {
+            return true
+        }
+
+        let distanceFromAnchor = location.distance(from: bearingAnchorLocation)
+        if distanceFromAnchor >= bearingAnchorRefreshDistance(from: bearingAnchorLocation) {
+            return true
+        }
+
+        guard distanceFromAnchor >= Self.minimumBearingAnchorRefreshDistance,
+              let targetBearing else {
+            return false
+        }
+
+        let updatedBearing = Self.qiblihBearing(from: location.coordinate, mode: bearingMode)
+        let bearingDelta = abs(Self.signedAngleDelta(from: targetBearing, to: updatedBearing))
+        return bearingDelta >= Self.minimumBearingAnchorRefreshAngle
+    }
+
+    private func bearingAnchorRefreshDistance(from location: CLLocation) -> CLLocationDistance {
+        let qiblihLocation = CLLocation(
+            latitude: Self.qiblihCoordinate.latitude,
+            longitude: Self.qiblihCoordinate.longitude
+        )
+        let distanceToQiblih = location.distance(from: qiblihLocation)
+        let scaledDistance = distanceToQiblih * Self.bearingAnchorRefreshDistanceRatio
+        return min(
+            max(scaledDistance, Self.minimumBearingAnchorRefreshDistance),
+            Self.maximumBearingAnchorRefreshDistance
+        )
     }
 
     private func updateCalibrationState() {

@@ -48,6 +48,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
     @Published private(set) var headingAccuracy: CLLocationDirection?
     @Published private(set) var isHeadingCalibrated = false
     @Published private(set) var isUsingApproximateHeading = false
+    @Published private(set) var isUsingLastKnownLocation = false
     @Published private(set) var isHeadingUnavailable = !CLLocationManager.headingAvailable()
 
     private static let calibratedHeadingAccuracy: CLLocationDirection = 35
@@ -57,6 +58,9 @@ final class LocationHeadingManager: NSObject, ObservableObject {
     private static let headingJumpConfirmationThreshold: CLLocationDirection = 18
     private static let headingJumpConfirmationSamples = 2
     private static let headingJumpResetInterval: TimeInterval = 1.5
+    private static let freshLocationMaxAge: TimeInterval = 60
+    private static let lastKnownLocationMaxAge: TimeInterval = 24 * 60 * 60
+    private static let lastKnownLocationMaxHorizontalAccuracy: CLLocationAccuracy = 10_000
 
     private let locationManager = CLLocationManager()
     private var isCheckingLocationServices = false
@@ -266,6 +270,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
 
         hasStartedUpdates = true
         locationManager.startUpdatingLocation()
+        useLastKnownLocationIfAvailable()
 
         #if targetEnvironment(simulator)
         useSimulatorHeadingPreview()
@@ -292,6 +297,39 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         targetBearing = Self.qiblihBearing(from: coordinate, mode: bearingMode)
         updateMagneticBearingIfPossible()
         updateDirectionIfPossible()
+    }
+
+    private func updateLocationIfUsable(_ location: CLLocation, allowsLastKnownLocation: Bool) {
+        guard location.horizontalAccuracy >= 0 else {
+            return
+        }
+
+        let locationAge = abs(location.timestamp.timeIntervalSinceNow)
+        if locationAge <= Self.freshLocationMaxAge {
+            isUsingLastKnownLocation = false
+            currentLocation = location
+            updateBearingIfPossible()
+            return
+        }
+
+        guard allowsLastKnownLocation,
+              currentLocation == nil,
+              locationAge <= Self.lastKnownLocationMaxAge,
+              location.horizontalAccuracy <= Self.lastKnownLocationMaxHorizontalAccuracy else {
+            return
+        }
+
+        isUsingLastKnownLocation = true
+        currentLocation = location
+        updateBearingIfPossible()
+    }
+
+    private func useLastKnownLocationIfAvailable() {
+        guard let location = locationManager.location else {
+            return
+        }
+
+        updateLocationIfUsable(location, allowsLastKnownLocation: true)
     }
 
     private func updateHeading(from heading: CLHeading) {
@@ -538,7 +576,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
                 } else if currentHeading == nil, targetBearing != nil {
                     detailText = "Waiting for your true heading."
                 } else if currentHeading != nil, targetBearing == nil {
-                    detailText = "Waiting for your location."
+                    detailText = "Waiting for GPS. Airplane mode can take longer."
                 } else {
                     detailText = "Waiting for location and compass readings."
                 }
@@ -564,7 +602,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
             statusText = "Turn right"
         }
 
-        detailText = ""
+        detailText = isUsingLastKnownLocation ? "Using last known location until GPS updates." : ""
     }
 
     private var calibrationDetailText: String {
@@ -592,14 +630,11 @@ extension LocationHeadingManager: CLLocationManagerDelegate {
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let location = locations.last,
-              location.horizontalAccuracy >= 0,
-              abs(location.timestamp.timeIntervalSinceNow) < 60 else {
+        guard let location = locations.last else {
             return
         }
 
-        currentLocation = location
-        updateBearingIfPossible()
+        updateLocationIfUsable(location, allowsLastKnownLocation: true)
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {

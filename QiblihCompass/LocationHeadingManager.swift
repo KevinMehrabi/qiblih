@@ -49,13 +49,12 @@ final class LocationHeadingManager: NSObject, ObservableObject {
     @Published private(set) var headingAccuracy: CLLocationDirection?
     @Published private(set) var isHeadingCalibrated = false
     @Published private(set) var isUsingApproximateHeading = false
-    @Published private(set) var isUsingLastKnownLocation = false
     @Published private(set) var isHeadingUnavailable = !CLLocationManager.headingAvailable()
 
     private static let calibratedHeadingAccuracy: CLLocationDirection = 35
     private static let poorHeadingAccuracy: CLLocationDirection = 65
     private static let poorHeadingSamplesBeforeRecalibration = 5
-    private static let locationDistanceFilter: CLLocationDistance = 500
+    private static let locationDistanceFilter: CLLocationDistance = 1_000
     private static let minimumBearingAnchorRefreshDistance: CLLocationDistance = 250
     private static let maximumBearingAnchorRefreshDistance: CLLocationDistance = 5_000
     private static let bearingAnchorRefreshDistanceRatio: CLLocationDistance = 0.005
@@ -66,9 +65,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
     private static let headingJumpConfirmationThreshold: CLLocationDirection = 18
     private static let headingJumpConfirmationSamples = 2
     private static let headingJumpResetInterval: TimeInterval = 1.5
-    private static let freshLocationMaxAge: TimeInterval = 60
-    private static let lastKnownLocationMaxAge: TimeInterval = 24 * 60 * 60
-    private static let lastKnownLocationMaxHorizontalAccuracy: CLLocationAccuracy = 10_000
+    private static let freshLocationMaxAge: TimeInterval = 30
 
     private let locationManager = CLLocationManager()
     private let motionManager = CMMotionManager()
@@ -108,7 +105,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         super.init()
 
         locationManager.delegate = self
-        locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+        locationManager.desiredAccuracy = kCLLocationAccuracyThreeKilometers
         locationManager.distanceFilter = Self.locationDistanceFilter
         locationManager.headingFilter = 2
         locationManager.headingOrientation = .portrait
@@ -287,7 +284,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
 
         hasStartedUpdates = true
         locationManager.startUpdatingLocation()
-        useLastKnownLocationIfAvailable()
+        locationManager.requestLocation()
 
         #if targetEnvironment(simulator)
         useSimulatorHeadingPreview()
@@ -329,38 +326,18 @@ final class LocationHeadingManager: NSObject, ObservableObject {
         updateDirectionIfPossible()
     }
 
-    private func updateLocationIfUsable(_ location: CLLocation, allowsLastKnownLocation: Bool) {
+    private func updateLocationIfUsable(_ location: CLLocation) {
         guard location.horizontalAccuracy >= 0 else {
             return
         }
 
         let locationAge = abs(location.timestamp.timeIntervalSinceNow)
-        if locationAge <= Self.freshLocationMaxAge {
-            let shouldReplaceLastKnownAnchor = isUsingLastKnownLocation
-            isUsingLastKnownLocation = false
-            currentLocation = location
-            updateBearingIfPossible(force: shouldReplaceLastKnownAnchor)
+        guard locationAge <= Self.freshLocationMaxAge else {
             return
         }
 
-        guard allowsLastKnownLocation,
-              currentLocation == nil,
-              locationAge <= Self.lastKnownLocationMaxAge,
-              location.horizontalAccuracy <= Self.lastKnownLocationMaxHorizontalAccuracy else {
-            return
-        }
-
-        isUsingLastKnownLocation = true
         currentLocation = location
-        updateBearingIfPossible(force: bearingAnchorLocation == nil)
-    }
-
-    private func useLastKnownLocationIfAvailable() {
-        guard let location = locationManager.location else {
-            return
-        }
-
-        updateLocationIfUsable(location, allowsLastKnownLocation: true)
+        updateBearingIfPossible()
     }
 
     private func updateHeading(from heading: CLHeading) {
@@ -717,7 +694,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
                 } else if currentHeading == nil, targetBearing != nil {
                     detailText = "Waiting for your true heading."
                 } else if currentHeading != nil, targetBearing == nil {
-                    detailText = "Waiting for GPS. Airplane mode can take longer."
+                    detailText = "Waiting for GPS or Wi-Fi location. Airplane mode can take longer."
                 } else {
                     detailText = "Waiting for location and compass readings."
                 }
@@ -743,7 +720,7 @@ final class LocationHeadingManager: NSObject, ObservableObject {
             statusText = "Turn right"
         }
 
-        detailText = isUsingLastKnownLocation ? "Using last known location until GPS updates." : ""
+        detailText = ""
     }
 
     private var calibrationDetailText: String {
@@ -775,7 +752,7 @@ extension LocationHeadingManager: CLLocationManagerDelegate {
             return
         }
 
-        updateLocationIfUsable(location, allowsLastKnownLocation: true)
+        updateLocationIfUsable(location)
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
@@ -796,6 +773,12 @@ extension LocationHeadingManager: CLLocationManagerDelegate {
         case .denied:
             statusText = "Location Permission Needed"
             detailText = "Allow location access in Settings to calculate the Qiblih direction."
+        case .locationUnknown:
+            statusText = "Finding the Qiblih"
+            detailText = "Waiting for live GPS or Wi-Fi location."
+        case .network:
+            statusText = "Finding the Qiblih"
+            detailText = "Wi-Fi location needs an internet connection or a GPS signal."
         case .headingFailure:
             isHeadingUnavailable = true
             statusText = "Compass Unavailable"
